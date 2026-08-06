@@ -7,14 +7,18 @@ from cis_pdf2csv.mandatory.schema import MandatoryAssessment
 from cis_pdf2csv.schema import ControlRecord
 
 from .attack_paths import ATTACK_PATH_BY_ID
-from .schema import ControlAttackPathMapping, MitigationRole, MitigationStrength
+from .schema import (
+    ControlAttackPathMapping,
+    LegacyMitigationRole,
+    LegacyMitigationStrength,
+)
 
 
 @dataclass(frozen=True)
 class MappingRule:
     attack_path_id: str
     capability_id: str
-    mitigation_role: MitigationRole
+    mitigation_role: LegacyMitigationRole
     attack_stage: str
 
 
@@ -67,7 +71,7 @@ CRITERION_RULES: dict[str, tuple[MappingRule, ...]] = {
 }
 
 
-def _strength(assessment: MandatoryAssessment) -> MitigationStrength:
+def _strength(assessment: MandatoryAssessment) -> LegacyMitigationStrength:
     if assessment.relationship == "boundary-set core member":
         return "complementary"
     if assessment.relationship in {"standalone primary boundary", "prerequisite"}:

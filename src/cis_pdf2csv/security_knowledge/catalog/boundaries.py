@@ -1,0 +1,29 @@
+from __future__ import annotations
+
+from .capabilities import PROVENANCE
+from .registry import BoundaryDefinition
+
+_BOUNDARIES = (
+    ("BND-NETWORK-HOST-FIREWALL", "Host firewall", "Traffic crossing a host network interface is filtered before reaching local services.", "Host ingress and egress enforcement", ("host networking",), ("network interfaces", "listening services"), ("firewall enabled", "unauthorized inbound traffic denied"), ("CAP-04",), ("notification and log formatting",)),
+    ("BND-NETWORK-SMB-SESSION", "SMB session security", "File-service sessions resist downgrade, relay, and unsigned exchange.", "SMB negotiation and authenticated session", ("SMB-compatible file services",), ("file services", "session credentials"), ("supported protocol floor", "session integrity", "insecure guest or plaintext rejected"), ("CAP-01", "CAP-04", "CAP-08"), ("audit-only SMB events",)),
+    ("BND-IDENTITY-LDAP-CHANNEL", "LDAP channel security", "Directory authentication and queries receive integrity and transport protection.", "Directory-service channel", ("LDAP-compatible directory services",), ("directory identities", "directory data"), ("channel signing", "channel encryption or sealing"), ("CAP-01", "CAP-08"), ("directory authorization policy",)),
+    ("BND-IDENTITY-NTLM-SESSION", "NTLM session security", "Legacy authentication negotiation and resulting sessions reject weak protection.", "NTLM authentication and session negotiation", ("NTLM-compatible authentication",), ("credentials", "authenticated sessions"), ("weak authentication refused", "session integrity", "session confidentiality"), ("CAP-01", "CAP-02", "CAP-08"), ("unrelated account policy",)),
+    ("BND-REMOTE-WINRM", "WinRM secure management", "Remote-management traffic and credentials are protected across the management channel.", "WinRM management channel", ("remote management protocols",), ("managed hosts", "administrator credentials"), ("unencrypted traffic rejected", "weak authentication rejected", "credential retention constrained"), ("CAP-02", "CAP-05", "CAP-08"), ("ordinary RPC service preferences",)),
+    ("BND-REMOTE-RDP", "RDP secure access", "Interactive remote administration enforces pre-authentication, protected transport, and restricted rights.", "Remote desktop access channel", ("interactive remote desktop protocols",), ("managed hosts", "remote sessions"), ("pre-authentication", "TLS security", "strong encryption", "restricted remote logon"), ("CAP-01", "CAP-05", "CAP-08"), ("session cosmetics and temporary folders",)),
+    ("BND-ENDPOINT-MALWARE-PROTECTION", "Malware protection stack", "Host protection continuously prevents and blocks malicious behavior.", "Endpoint prevention and response controls", ("endpoint protection",), ("host execution", "security agent"), ("real-time protection", "behavior monitoring", "network blocking", "protection cannot be disabled"), ("CAP-07",), ("scan schedules and user-interface visibility",)),
+    ("BND-IDENTITY-PRIVILEGED-CREDENTIALS", "Privileged credential and execution boundary", "Administrative credentials and elevation transitions are isolated and mediated.", "Privileged credential material and elevation", ("operating-system privilege mechanisms",), ("credential memory", "administrative tokens"), ("credential isolation", "weak storage disabled", "elevation mediated"), ("CAP-02", "CAP-03"), ("account renaming and cosmetic identity changes",)),
+    ("BND-EXECUTION-APPLICATION-CONTROL", "Application control", "Execution policy admits only trusted applications.", "Executable application admission", ("application execution environments",), ("applications", "host processes"), ("trust decision enforced before execution",), ("CAP-06",), ("malware scanning without admission control",)),
+    ("BND-EXECUTION-SCRIPT-CONTROL", "Script control", "Interpreted and active content is constrained by enforceable policy.", "Script and active-content execution", ("script interpreters",), ("scripts", "automation hosts"), ("untrusted script execution restricted",), ("CAP-06",), ("script logging alone",)),
+    ("BND-CRYPTO-TRANSPORT", "Transport cryptography", "Network exchanges require approved confidentiality and integrity protection.", "Generic transport channel", ("network transports",), ("data in transit",), ("plaintext disabled", "approved cryptography required"), ("CAP-08",), ("application authorization",)),
+    ("BND-DATA-STORAGE-ENCRYPTION", "Storage encryption", "Stored data is cryptographically protected from offline or unauthorized access.", "Persistent storage", ("data storage",), ("stored data", "storage media"), ("approved encryption at rest",), ("CAP-10",), ("transport-only encryption",)),
+    ("BND-MONITORING-SECURITY-AUDIT", "Security audit", "Security events and forensic evidence are generated and preserved.", "Security event pipeline", ("audit and logging systems",), ("security events", "audit records"), ("essential events generated", "evidence retained"), ("CAP-09",), ("preventive controls merely named in an audit event",)),
+)
+
+BOUNDARIES = tuple(
+    BoundaryDefinition(
+        boundary_id=row[0], name=row[1], description=row[2], protected_security_surface=row[3],
+        technology_scope=row[4], assets=row[5], required_security_effects=row[6],
+        related_capability_ids=row[7], known_exclusions=row[8], provenance=PROVENANCE,
+    )
+    for row in _BOUNDARIES
+)

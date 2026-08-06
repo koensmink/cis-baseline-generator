@@ -15,9 +15,15 @@ class MockClient:
             "reasoning": "mock",
         }
 
+    def suggest_mappings_batch(
+        self,
+        mappings: list[IntuneMapping],
+    ) -> list[dict]:
+        return [self.suggest_mapping(mapping) for mapping in mappings]
+
 
 class LLMFallbackTests(unittest.TestCase):
-    def test_only_manual_review_gets_suggestions(self):
+    def test_only_manual_review_gets_suggestions(self) -> None:
         suggestions = suggest_manual_review_mappings(
             [
                 IntuneMapping(

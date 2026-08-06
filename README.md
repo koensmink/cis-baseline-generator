@@ -418,6 +418,20 @@ Planned improvements:
 
 ---
 
+# Mandatory Control Engine (Phase 1)
+
+The deterministic Mandatory-control preselection engine evaluates existing
+parser-produced `ControlRecord` JSONL without changing the PDF parser or CIS
+scoring model. See [the Phase 1 documentation](docs/mandatory-control-phase1.md)
+for the integrated 85% completion rule, criteria, exclusions, comparison model,
+and limitations.
+
+```bash
+cis-mandatory-analyze controls.jsonl -o mandatory-review.csv
+```
+
+---
+
 # License
 
 MIT License for code

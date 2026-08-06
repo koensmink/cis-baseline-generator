@@ -83,11 +83,17 @@ Attack Technique
     ↓
 Attack Path
     ↓
-Security Outcome / Risk
+Security Outcome
     ↓
 Mitigation Mapping
     ↓
 Mandatory Decision
+```
+
+Risk is a contextual branch, not a mandatory step in that chain:
+
+```text
+Threat Scenario + Security Outcome + context + existing mitigations → Risk
 ```
 
 This order expresses how an assessment should be explained. It is not a strict
@@ -185,43 +191,81 @@ paths, compliance requirements, or Mandatory decisions.
 
 ## 6. Security Boundary
 
-A Security Boundary is a concrete enforcement surface at which access,
-execution, information flow, privilege, or security state is controlled. A
-boundary may be enforced by one standalone control or by a minimum effective set
-of complementary controls.
+A Security Boundary is an enforcement surface at which access, execution,
+information flow, privilege, or security state is controlled. Boundary semantics
+are represented by three separate objects.
 
 Examples include SMB session security, LDAP channel security, NTLM session
 security, a host firewall, WinRM, RDP, a malware-protection stack, and a
 privileged-execution boundary.
 
-A boundary object MUST define:
+### BoundaryDefinition
 
-- `boundary_id`;
-- `name` and `description`;
-- `technology_scope`;
-- `applicability` and applicability mode;
-- `required_sub_boundaries`;
-- `minimum_effective_control_set`;
-- `optional_supporting_controls`;
-- `completeness_rules`;
-- `compensating_control_rules`; and
-- `related_capability_ids`.
+A `BoundaryDefinition` is the stable, generic security-boundary catalog object.
+It MUST use `BND-<DOMAIN>-<TOKEN>`, and MUST own:
 
-`BND-*` identifies the enforcement surface. `BS-*` identifies a boundary-set
-definition or deployment-specific minimum effective set. A boundary MAY have
-more than one valid boundary set when alternative implementations exist.
+- name, definition, and security objective;
+- technology scope, expressed generically enough to support multiple products;
+- required security effects or sub-boundaries;
+- related capability IDs;
+- generic compensation constraints; and
+- lifecycle status and catalog provenance.
 
-Boundary-set roles are:
+It MUST NOT own a benchmark profile, deployment state, selected implementation,
+or evaluation result.
 
-- **standalone primary boundary:** independently enforces the relevant boundary;
-- **boundary-set core member:** enforces a distinct required sub-boundary;
-- **prerequisite:** must exist for the boundary or a core member to function;
-- **supporting hardening:** reduces exposure but does not complete the boundary;
-- **fine-tuning:** adjusts parameters of an already established boundary;
-- **detection-only:** observes events without enforcing the preventive boundary;
-- **information-hiding:** changes exposed information or presentation without
+### BoundarySetDefinition
+
+A `BoundarySetDefinition` is a generic minimum effective control-effect set that
+implements one `BoundaryDefinition`. It MUST use `BS-<DOMAIN>-<TOKEN>`, and MUST
+own:
+
+- its referenced `boundary_definition_id`;
+- required core effects and prerequisites;
+- allowed alternative-effect groups;
+- optional supporting effects;
+- generic completeness predicates; and
+- lifecycle status and catalog provenance.
+
+A boundary MAY have multiple active boundary-set definitions when materially
+different implementations can enforce the same boundary. A boundary-set
+definition MUST NOT contain benchmark control IDs.
+
+### BoundaryEvaluation
+
+A `BoundaryEvaluation` is the benchmark-specific or environment-specific result
+of applying a boundary definition and, optionally, a boundary-set definition. It
+MUST use `BEV-<DOMAIN>-<TOKEN>` and contain:
+
+- `boundary_definition_id`;
+- optional `boundary_set_definition_id`;
+- decision scope, source benchmark identity and profile;
+- applicability mode and deployment state;
+- selected source recommendations and selected alternatives;
+- satisfied and missing effects and prerequisites;
+- completeness state;
+- compensating-control evaluation IDs;
+- residual attack-path statement;
+- evaluation confidence; and
+- evaluation provenance.
+
+Ownership is normative: `BoundaryDefinition` owns technology scope and generic
+compensation constraints; `BoundarySetDefinition` owns minimum-set structure,
+alternatives, and generic completeness rules; `BoundaryEvaluation` owns
+benchmark profile, deployment applicability, selected alternatives, evaluated
+completeness, accepted compensation, and residual exposure.
+
+The `boundary_role` enum is:
+
+- `standalone_primary_boundary`: independently enforces the relevant boundary;
+- `boundary_set_core_member`: enforces a distinct required sub-boundary;
+- `prerequisite`: must exist for the boundary or a core member to function;
+- `supporting_hardening`: reduces exposure but does not complete the boundary;
+- `fine_tuning`: adjusts parameters of an already established boundary;
+- `detection_only`: observes events without enforcing the preventive boundary;
+- `information_hiding`: changes exposed information or presentation without
   materially enforcing access;
-- **operational:** affects administration, lifecycle, or usability without
+- `operational`: affects administration, lifecycle, or usability without
   constituting the security boundary.
 
 Related controls MUST be distinguished as follows:
@@ -263,7 +307,7 @@ A threat scenario MUST define:
 - `impact`;
 - `related_technique_ids`;
 - `related_boundary_ids`;
-- `evidence`; and
+- typed `evidence_references`; and
 - `confidence`.
 
 Threat scenarios SHOULD be split when attacker position, required privilege,
@@ -290,6 +334,8 @@ product-specific implementation details are distinct. A MITRE technique is not
 an attack path. Multiple threat scenarios may map to one technique, and one
 scenario may involve multiple techniques. External mappings are enrichment,
 not authoritative source facts, and MUST include framework/version provenance.
+Attack techniques are optional enrichments for active paths; they do not replace
+a concrete Threat Scenario.
 
 ## 9. Attack Path
 
@@ -325,10 +371,18 @@ An attack path MUST define:
 - `related_threat_scenario_ids`;
 - `related_technique_ids`;
 - `related_boundary_ids`;
-- `primary_mitigation_mapping_ids`;
-- `complementary_mitigation_mapping_ids`;
 - `residual_path_when_partially_mitigated`; and
 - `confidence`.
+
+Every active AttackPath MUST reference at least one active ThreatScenario.
+Technique-only paths MAY exist only with `draft` status and are ineligible for
+Candidate Mandatory decisions. Techniques remain optional enrichment.
+
+AttackPath MUST remain a reusable catalog object. It MUST NOT contain source
+control mapping IDs. AttackPath-to-MitigationMapping relationships are derived
+by querying MitigationMapping objects. If generic curated mitigations are later
+needed, they MUST be separate catalog objects and MUST NOT be represented as
+source-control mappings.
 
 A path SHOULD be split when it has materially different entry conditions,
 attacker privileges, target assets, stage order, primary boundaries, or security
@@ -344,7 +398,7 @@ escalation, lateral movement, remote code execution, loss of confidentiality,
 loss of integrity, loss of availability, domain compromise, and loss of
 forensic evidence.
 
-An outcome object SHOULD define an immutable ID, name, description, affected
+An outcome object MUST define an immutable ID, name, description, affected
 security property, affected asset classes, severity factors, and lifecycle
 status. Outcomes describe results; they do not include likelihood.
 
@@ -374,31 +428,57 @@ Risk MUST be scoped to an environment or declared reference context. A source
 recommendation's rationale is evidence about a general security concern; it is
 not automatically a customer-specific risk assessment.
 
+The relationships are normative:
+
+```text
+AttackPath → SecurityOutcome
+ThreatScenario + SecurityOutcome + context + existing mitigations → Risk
+```
+
+A generic Mandatory decision MAY rely on a SecurityOutcome and does not require
+a customer-specific Risk object.
+
 ## 11. Mitigation Mapping
 
 A Mitigation Mapping is the evidence-bearing relationship between a source
-control and reusable security knowledge. It MUST define:
+control and reusable security knowledge. It is atomic. Each mapping MUST contain
+singular:
 
-- `mapping_id` and `control_id` with full source scope;
+- `mapping_id`;
+- `source_recommendation_id` with full source scope;
 - `capability_id`;
-- `boundary_id` and, where applicable, `boundary_set_id`;
-- `threat_scenario_ids`;
-- `technique_ids`;
-- `attack_path_ids`;
+- `boundary_definition_id`;
+- optional `boundary_set_definition_id`;
+- optional `threat_scenario_id`;
+- `attack_path_id`;
+- `attack_stage`;
+- `boundary_role`;
 - `mitigation_role`;
 - `mitigation_strength`;
-- `attack_stage`;
 - `enforced_sub_boundary`;
 - `attack_path_if_omitted`;
-- `compensating_controls` or an explicit none-known assertion;
 - `non_compensability_reason`;
-- `evidence`;
+- `applicability_mode` and applicability expression;
 - `confidence`; and
-- `applicability_mode` and applicability expression.
+- mapping evidence and provenance.
 
-Mitigation roles are `prevent`, `restrict`, `isolate`, `protect`, `detect`,
-`investigate`, and `recover`. Mitigation strengths are `primary`,
-`complementary`, and `supporting`.
+Lists are permitted only for `corroborating_technique_ids`,
+`evidence_reference_ids`, and `compensating_control_evaluation_ids`. If a source
+recommendation applies to multiple attack paths, stages, capabilities, or
+boundaries, the engine MUST create multiple atomic mapping objects.
+`threat_scenario_id` is optional for general mappings, but MUST be populated for
+any mapping used as Candidate Mandatory evidence.
+
+The three role dimensions are independent:
+
+- `boundary_role`: `standalone_primary_boundary`,
+  `boundary_set_core_member`, `prerequisite`, `supporting_hardening`,
+  `fine_tuning`, `detection_only`, `information_hiding`, or `operational`;
+- `mitigation_role`: `prevent`, `restrict`, `isolate`, `protect`, `detect`,
+  `investigate`, or `recover`; and
+- `mitigation_strength`: `primary`, `complementary`, or `supporting`.
+
+No value from one dimension may be serialized into another dimension.
 
 Applicability modes are:
 
@@ -407,12 +487,58 @@ Applicability modes are:
   role is deployed; and
 - `unresolved` — available evidence does not establish applicability.
 
+Deployment state is independently represented as `deployed`, `not_deployed`,
+`unknown`, or `not_evaluated`. Decision scope is `benchmark` or `environment`.
+
+Valid combinations and outcomes are:
+
+| Decision scope | Applicability mode | Deployment state | Permitted result |
+|---|---|---|---|
+| benchmark | universal | not_evaluated | Normal benchmark decision |
+| benchmark | mandatory_when_deployed | not_evaluated or unknown | Conditional Candidate Mandatory is permitted when all mapping confidence is High; the condition MUST be explicit |
+| benchmark | unresolved | any | Review Required |
+| environment | universal | deployed | Normal environment decision |
+| environment | universal | not_deployed | Not applicable in that environment; not Definitive Mandatory there |
+| environment | mandatory_when_deployed | deployed | Candidate or human-approved Definitive Mandatory is permitted |
+| environment | mandatory_when_deployed | not_deployed | Not applicable in that environment |
+| environment | universal or mandatory_when_deployed | unknown or not_evaluated | Review Required |
+| environment | unresolved | any | Review Required |
+
+Other combinations are invalid. `deployment_state` MUST NOT be used to rewrite
+the source applicability fact; it belongs to BoundaryEvaluation or decision
+context.
+
 Title matching alone is insufficient. A mapping MUST use a recognized boundary
 or corroborating behavioral evidence from description, rationale, impact,
 remediation, or another permitted source fact. References and audit commands
 MUST NOT independently create a mapping. One mapping SHOULD express one coherent
-control–capability–path–stage assertion; multiple assertions require multiple
-mapping objects.
+control–capability–path–stage assertion.
+
+### CompensatingControlEvaluation
+
+Compensation is an explicit evaluation, not free text on a control. A
+`CompensatingControlEvaluation` MUST contain:
+
+- `evaluation_id`;
+- `source_mapping_id`;
+- `candidate_compensating_control_id` with full source scope;
+- `replaced_security_effect`;
+- `protected_scope`;
+- `equivalence_type`: `full`, `conditional`, `partial`, or `none`;
+- prerequisites;
+- applicability;
+- typed evidence references;
+- confidence;
+- `residual_attack_path`;
+- reviewer;
+- status and provenance.
+
+Only `full` equivalence, or `conditional` equivalence explicitly accepted by an
+authorized reviewer with all conditions satisfied, may satisfy a compensation
+review. `partial` and `none` leave the omitted path non-compensated. A control
+whose boundary role is `supporting_hardening`, `fine_tuning`, `detection_only`,
+`information_hiding`, or `operational` MUST NOT be treated as full compensation
+for a missing primary or core security effect.
 
 ## 12. Mandatory Decision
 
@@ -434,13 +560,35 @@ Candidate Mandatory requires all of the following:
 - sufficient source evidence;
 - at least one explicit Security Capability;
 - a concrete, active Security Boundary;
-- at least one reliable Threat Scenario or Attack Path;
-- a primary, complementary-core, or prerequisite mitigation role;
+- at least one active Threat Scenario and its active Attack Path;
+- `boundary_role` equal to `standalone_primary_boundary`,
+  `boundary_set_core_member`, or `prerequisite`;
+- `mitigation_strength` equal to `primary` or `complementary`;
 - a concrete attack path left open when the control is omitted;
 - a boundary-level non-compensability explanation;
 - resolved applicability;
 - sufficient mapping and decision confidence; and
 - no blocking exclusion.
+
+“Reliable” and “sufficient confidence” are not implementation-defined terms.
+Candidate Mandatory requires `High` confidence for every required link:
+
+| Confidence dimension | Candidate Mandatory threshold |
+|---|---|
+| source extraction | High |
+| capability mapping | High |
+| boundary mapping and BoundaryEvaluation | High |
+| threat-scenario mapping | High |
+| attack-path mapping | High |
+| MitigationMapping | High |
+| final Mandatory decision | High |
+
+Any required dimension below High produces Review Required. For
+`mandatory_when_deployed`, a benchmark-scoped conditional Candidate Mandatory is
+permitted only when every mapping dimension is High. An environment-scoped
+Definitive Mandatory decision additionally requires `deployment_state =
+deployed`. `unknown` or `not_evaluated` deployment state at environment scope
+produces Review Required.
 
 `Review Required` applies when an attack-path mapping is missing, boundary role
 is unresolved, applicability is unresolved, alternatives or duplicates cannot
@@ -464,43 +612,82 @@ Confidence MUST be recorded separately for:
 - attack-path mapping; and
 - Mandatory decision.
 
-The allowed values are `High`, `Medium`, and `Low`. Each type SHOULD define
-type-specific criteria. Confidence MUST NOT be averaged into a generic numeric
-score. The Mandatory decision MUST use the confidence of its required links,
-not merely copy source-extraction confidence.
+The allowed values are `High`, `Medium`, and `Low`. Confidence criteria MUST be
+defined per object or relationship type. Confidence MUST NOT be averaged into a
+generic numeric score. The Mandatory decision MUST use the confidence of every
+required link, not merely copy source-extraction confidence.
 
-Every inferred object or mapping MUST retain:
+Provenance types are separate:
 
-- source fields used;
-- source page range;
-- source-document and block hashes where available;
-- mapping method (`deterministic_rule`, `analyst`, or a future explicitly named
-  method);
-- rule identifier and version;
-- ontology/model version;
-- reviewer identity when reviewed;
-- review timestamp; and
-- lineage to any superseded mapping.
+- `SourceExtractionProvenance` records source framework, benchmark identity and
+  version, source and block hashes, pages, parser version, extraction method, and
+  extraction timestamp.
+- `CatalogObjectProvenance` records catalog authority, catalog and object
+  versions, creation method, rationale sources, lifecycle changes, and
+  supersession lineage. Reusable catalog objects MUST NOT claim CIS fields or
+  pages as their origin.
+- `MappingEvidenceProvenance` records source fields used, evidence-reference IDs,
+  deterministic rule or analyst method, rule version, ontology version,
+  mapping timestamp, and superseded mapping lineage.
+- `ReviewProvenance` records reviewer identity, review authority, review
+  timestamp, disposition, comments, and the reviewed object revision.
+- `DecisionProvenance` records evaluated source, mapping, boundary-evaluation,
+  rule, catalog, and ontology versions; decision scope; decision timestamp;
+  reviewer approval where applicable; and superseded decision lineage.
 
-Evidence excerpts MUST remain bounded and attributable. A mapping without
-evidence is invalid.
+Evidence categories are:
+
+- `source_control_evidence`;
+- `curated_security_evidence`;
+- `external_reference`;
+- `analyst_inference`;
+- `test_evidence`; and
+- `review_evidence`.
+
+Every evidence item MUST contain `evidence_type`, `source`, `locator`,
+`assertion`, `collection_method`, `confidence`, and a timestamp where the source
+or collection event is time-dependent. Evidence excerpts MUST remain bounded and
+attributable. A mapping without at least one permitted evidence item is invalid.
+Candidate Mandatory additionally requires source-control evidence for the
+enforced behavior; curated or external evidence alone is insufficient.
 
 ## 14. Object relationships
 
 | From | Relationship | To | Cardinality |
 |---|---|---|---|
-| Source Recommendation | provides evidence for | Security Capability | many-to-many |
-| Security Capability | is realized by | Security Boundary | many-to-many |
-| Security Boundary | is exposed in | Threat Scenario | many-to-many |
+| Source Recommendation | is source of | Mitigation Mapping | one-to-many |
+| Mitigation Mapping | references | Security Capability | many-to-one |
+| Mitigation Mapping | references | BoundaryDefinition | many-to-one |
+| Mitigation Mapping | optionally references | BoundarySetDefinition | many-to-zero-or-one |
+| Mitigation Mapping | optionally references | Threat Scenario | many-to-zero-or-one |
+| Mitigation Mapping | corroborates with | Attack Technique | many-to-many |
+| Mitigation Mapping | references | Attack Path | many-to-one |
+| Security Capability | is realized by | BoundaryDefinition | many-to-many |
+| BoundaryDefinition | is exposed in | Threat Scenario | many-to-many |
 | Threat Scenario | involves | Attack Technique | many-to-many |
 | Attack Technique | participates in | Attack Path | many-to-many |
 | Attack Path | produces | Security Outcome | many-to-many |
 | Threat Scenario | contextualizes | Risk | one-to-many |
-| Source Recommendation | participates in | Boundary Set | many-to-many |
-| Boundary Set | implements | Security Boundary | many-to-one or many-to-many for composite boundaries |
-| Source Recommendation | mitigates through mapping | Attack Path | many-to-many |
-| Boundary Set | mitigates | Attack Path | many-to-many |
-| Mitigation Mapping | supports | Mandatory Decision | many-to-many evidence into one decision revision |
+| BoundarySetDefinition | implements | BoundaryDefinition | many-to-one |
+| BoundaryEvaluation | evaluates | BoundaryDefinition | many-to-one |
+| BoundaryEvaluation | optionally applies | BoundarySetDefinition | many-to-zero-or-one |
+| Mitigation Mapping | supports | Mandatory Decision | many mappings into one decision revision |
+
+The canonical relationship graph is therefore:
+
+```text
+SourceRecommendation → MitigationMapping
+MitigationMapping → Capability
+MitigationMapping → BoundaryDefinition
+MitigationMapping → BoundarySetDefinition
+MitigationMapping → ThreatScenario
+MitigationMapping → AttackTechnique
+MitigationMapping → AttackPath
+```
+
+Direct SourceRecommendation-to-Capability and SourceRecommendation-to-AttackPath
+edges are derived projections only. They MUST NOT be authoritative or carry
+independent evidence, confidence, or lifecycle state.
 
 Prohibited relationships and dependencies:
 
@@ -517,30 +704,38 @@ Prohibited relationships and dependencies:
 
 ## 15. Stable identifier conventions
 
-New catalog identifiers SHOULD use:
+Identifiers MUST match these exact regular-expression grammars:
 
-- `CAP-###` — capability;
-- `BND-<DOMAIN>-<NAME>` — security boundary;
-- `BS-<DOMAIN>-<NAME>` — boundary-set definition;
-- `TS-###` — threat scenario;
-- `TEC-###` — internal attack technique;
-- `AP-###` — attack path;
-- `OUT-###` — security outcome;
-- `RISK-###` — qualitative risk record;
-- `MAP-###` — mitigation mapping; and
-- `MD-###` — versioned Mandatory decision.
+- `CAP-[0-9]{2,3}` — capability;
+- `BND-[A-Z0-9]+(?:-[A-Z0-9]+)*` — BoundaryDefinition;
+- `BS-[A-Z0-9]+(?:-[A-Z0-9]+)*` — BoundarySetDefinition;
+- `BEV-[A-Z0-9]+(?:-[A-Z0-9]+)*` — BoundaryEvaluation;
+- `TS-[0-9]{3,}` — ThreatScenario;
+- `TEC-[0-9]{3,}` — internal AttackTechnique;
+- `AP-[0-9]{3,}` — AttackPath;
+- `OUT-[0-9]{3,}` — SecurityOutcome;
+- `RISK-[0-9]{3,}` — qualitative Risk record;
+- `MAP-[0-9]{3,}` — MitigationMapping; and
+- `MD-[0-9]{3,}` — versioned MandatoryDecision.
 
 Identifiers are immutable and MUST NOT be reused. Names MAY change. Deprecated
 objects retain their IDs and point to successors.
 
-There is a current convention conflict: the active capability catalog uses
-`CAP-01` through `CAP-10`, while the general convention above specifies
-`CAP-###`. Existing capability IDs are already stable and MUST NOT be silently
-renumbered. They are grandfathered until an explicit compatibility decision is
-made. New implementation work must either formally adopt variable-width
-`CAP-[0-9]{2,3}` identifiers or publish a versioned migration with aliases; this
-document recommends preserving `CAP-01`–`CAP-10` and permitting two or three
-digits.
+`CAP-01` through `CAP-10` are immutable active identifiers and MUST be preserved.
+New capability IDs use the same two-or-three-digit grammar.
+
+Alphabetic tokens MUST be normalized to uppercase before validation. IDs MUST
+not contain whitespace, underscores, punctuation other than the prescribed
+hyphens, or locale-dependent characters. The designated catalog authority owns
+allocation for `CAP`, `BND`, `BS`, `TS`, `TEC`, `AP`, and `OUT`. The evaluation
+authority owns `BEV`; the mapping authority owns `MAP`; the decision authority
+owns `RISK` and `MD`. Each ID is unique within its prefix namespace across all
+catalog versions and environments.
+
+On collision, allocation MUST fail; an implementation MUST NOT silently append,
+renumber, or reuse a token. The authority must allocate a new ID and record the
+rejected collision. Environment-local objects MUST include their environment or
+context in provenance, not by changing identifier grammar.
 
 IDs embedded in exports SHOULD be accompanied by catalog version so that their
 meaning is reproducible.
@@ -572,26 +767,43 @@ Active catalogs and rules SHOULD be reviewed at least annually and when a
 material benchmark, product security model, or external framework version
 changes. Deprecated objects remain readable for historical exports.
 
+New mappings, BoundaryEvaluations, risks, and decisions MUST reference active
+catalog objects. Deprecated or superseded objects MAY be referenced only when
+`historical_evaluation_mode = true` and the provenance records the historical
+catalog versions. A new mapping that references such an object outside that mode
+is invalid. A decision encountering the reference MUST become Review Required
+until the mapping is migrated to active targets.
+
 ## 17. Coverage semantics
 
 Coverage is a set of explicit relationships and gaps, not a simplistic risk
-percentage. Reports SHOULD distinguish:
+percentage. Preventive coverage state for each applicable path and evaluated
+boundary MUST be exactly one of:
 
-- attack paths with no mitigation mapping;
-- attack paths with no primary mitigation;
-- incomplete boundary sets;
-- missing prerequisites;
-- capabilities not represented by applicable controls;
-- threat scenarios with detection but no prevention or restriction;
-- preventive controls without detection or investigation coverage;
-- unresolved applicability; and
-- residual attack-path statements after partial mitigation.
+- `no_effective_mitigation`: no applicable High-confidence mapping with
+  `standalone_primary_boundary`/primary or
+  `boundary_set_core_member`/complementary semantics is mapped;
+- `complete_standalone_primary`: an applicable High-confidence standalone
+  primary fully enforces the evaluated boundary;
+- `complete_complementary_core_set`: all required High-confidence core effects
+  and prerequisites are present and selected alternatives are resolved;
+- `supporting_only`: only supporting-strength or supporting-boundary-role
+  mappings are present;
+- `detection_only`: only detect or investigate mappings are present; or
+- `incomplete_boundary`: some primary/core mitigation exists, but a required
+  effect, prerequisite, alternative, applicability decision, or accepted
+  compensation is missing.
 
-**No coverage** means no applicable reliable mitigation is mapped to the object.
-**Incomplete coverage** means some relevant mitigation exists but a required
-boundary effect, prerequisite, stage, or applicability decision is missing.
-**Supporting-only coverage** means mapped controls reduce exposure without
-closing the primary path.
+Only `no_effective_mitigation` and `incomplete_boundary` are preventive coverage
+gaps. `complete_complementary_core_set` is effective mitigation even though no
+single control has `mitigation_strength = primary`. `supporting_only` and
+`detection_only` are explicitly non-preventive coverage states and MUST be
+reported separately, not mislabeled as complete prevention.
+
+Reports MUST additionally identify missing prerequisites, unrepresented
+capabilities, threat scenarios with detection but no prevention/restriction,
+preventive controls without detection/investigation coverage, unresolved
+applicability, and residual path statements after partial mitigation.
 
 The number of controls is not equivalent to attack-path coverage. Ten duplicate
 settings may cover one sub-boundary, while two complementary controls may close
@@ -618,8 +830,9 @@ The following text is invented and does not reproduce a CIS recommendation.
    Cryptographic and transport protection** because it enforces message
    integrity.
 2. It enforces the signing sub-boundary of
-   `BND-DIRECTORY-LDAP-CHANNEL`, represented in the current implementation by
-   `BS-LDAP-SECURITY`.
+   BoundaryDefinition `BND-DIRECTORY-LDAP-CHANNEL` through BoundarySetDefinition
+   `BS-DIRECTORY-LDAP-SECURITY`. A benchmark BoundaryEvaluation records the
+   applicable profile, selected signing and sealing members, and completeness.
 3. Threat scenario `TS-EXAMPLE-001` states that an attacker with a network
    interception position relays an unsigned directory authentication exchange
    to act with the victim's privileges.
@@ -630,16 +843,17 @@ The following text is invented and does not reproduce a CIS recommendation.
    interception**.
 6. Outcomes include unauthorized directory access and possible privilege
    escalation.
-7. The mapping role is `prevent` at the authentication stage. Its strength is
-   `complementary` because LDAP channel encryption/sealing protects a distinct
-   required sub-boundary and signing alone does not complete the minimum set.
+7. The atomic mapping has `boundary_role = boundary_set_core_member`,
+   `mitigation_role = prevent`, and `mitigation_strength = complementary` at the
+   authentication stage. LDAP channel encryption/sealing protects a distinct
+   required sub-boundary, so signing alone does not complete the minimum set.
 8. If signing is omitted, an integrity-unprotected relay path remains even when
    encryption/sealing protects confidentiality. The other member cannot provide
    message-authenticity enforcement and therefore cannot compensate.
-9. With formal eligibility, sufficient evidence, resolved applicability, High
-   mapping confidence, a complete boundary set, and no exclusions, the control
-   may be proposed as **Candidate Mandatory**. Human approval is still required
-   for Definitive Mandatory.
+9. With formal eligibility, attributable evidence, resolved applicability, High
+   confidence in every required dimension, a complete BoundaryEvaluation, and
+   no exclusions, the control may be proposed as **Candidate Mandatory**. Human
+   approval is still required for Definitive Mandatory.
 
 A firewall log filename or successful-connection logging setting does not
 enforce the firewall traffic boundary; it is fine-tuning or detection-only. A
@@ -650,34 +864,33 @@ but neither receives the same Mandatory conclusion.
 
 ## 19. Validation rules
 
-Implementations MUST enforce machine-testable invariants including:
+Implementations MUST enforce these executable invariants. “Failure outcome” is
+normative.
 
-1. Candidate Mandatory MUST reference an active boundary.
-2. Candidate Mandatory MUST have at least one reliable attack-path mapping.
-3. Candidate Mandatory MUST have a primary, complementary-core, or prerequisite
-   boundary role.
-4. Every Mitigation Mapping MUST contain attributable evidence.
-5. No criterion or mapping may be created solely from references, citations, or
-   audit commands.
-6. `unresolved` applicability cannot produce an unconditional Candidate or
-   Definitive Mandatory decision.
-7. Duplicate controls cannot both be primary for the same boundary,
-   sub-boundary, effect, and applicability scope.
-8. Every active Attack Path MUST reference at least one Threat Scenario or
-   internal/external Attack Technique.
-9. Coverage output MUST distinguish no coverage from incomplete coverage.
-10. Mapping targets MUST exist and be active in the declared catalog version.
-11. A mapping's attack stage MUST occur in the referenced path's ordered stages.
-12. A supporting-only mapping MUST NOT satisfy Candidate Mandatory attack-path
-    evidence.
-13. Source recommendation identity MUST include benchmark scope; duplicate bare
-    control IDs across benchmarks MUST NOT collide.
-14. A decision revision MUST cite the mapping and rule versions it evaluated.
+| Invariant | Required fields | Predicate and success condition | Failure outcome |
+|---|---|---|---|
+| Active boundary | MandatoryDecision mapping IDs; each mapping's `boundary_definition_id`; catalog lifecycle status | Every Candidate mapping target exists and has `status = active`; its BoundaryEvaluation references the same active boundary | Candidate becomes Review Required; nonexistent target also makes the mapping invalid |
+| Reliable attack path | Candidate mapping IDs; AttackPath status; ThreatScenario IDs/status; all confidence dimensions | At least one atomic mapping references an active path with at least one active scenario, `mitigation_strength` primary/complementary, eligible `boundary_role`, and High confidence in every required dimension | Review Required with attack-path-mapping reason |
+| Attributable evidence | Mapping evidence-reference IDs; typed evidence fields | At least one evidence item has all required evidence fields and at least one is `source_control_evidence` supporting the enforced behavior | Mapping rejected as invalid |
+| No audit/reference activation | Evidence types; mapping method trace; permitted behavioral source fields | Removing references, citations, and audit-command evidence leaves the deterministic mapping predicate true | Mapping rejected; affected Candidate becomes Review Required |
+| Eligible boundary role | `boundary_role`; `mitigation_strength` | Candidate uses `standalone_primary_boundary` with primary strength, `boundary_set_core_member` with complementary strength, or `prerequisite` with primary/complementary strength | Review Required |
+| Duplicate effect | Source scope, boundary/effect/scope, overlap classification, selected alternative | No two mappings are both claimed as the unique primary for identical boundary, sub-boundary, effect, and applicability; one is selected or classified duplicate/alternative | Review Required for unresolved controls; duplicate primary claim invalid |
+| Applicability | decision scope, applicability mode, deployment state | Combination appears in the section 11 validity table; environment Mandatory has deployed state | Invalid combination is rejected; unresolved/unknown environment decision becomes Review Required |
+| Complete boundary | BoundaryEvaluation, required effects/prerequisites, alternatives, compensation evaluations, confidence | Standalone primary is complete, or every required set effect/prerequisite is satisfied by selected active High-confidence mappings or accepted full/conditional compensation | `incomplete_boundary` coverage gap and Review Required for affected Candidate |
+| Compensation | CompensatingControlEvaluation required fields/status | Equivalence is full, or conditional with every condition satisfied and authorized acceptance; supporting controls are never full equivalence | Compensation rejected; residual path remains open |
+| Catalog lifecycle | target IDs/status, historical mode, catalog versions | All new references are active, or deprecated/superseded references occur only in explicit historical mode | New object invalid; decision becomes Review Required until migrated |
+| AttackPath validity | path status, ordered stages, active scenario IDs | Every active path has at least one active ThreatScenario; draft technique-only path is not used by Candidate | Active object invalid or Candidate mapping rejected |
+| Attack stage | mapping attack stage; path ordered stages | Mapping stage is exactly one stage declared by the referenced path | Mapping rejected |
+| Source identity | framework, benchmark identity/version, profile, control ID | Composite identity is complete and unique within the evaluated dataset | Source object invalid; mappings cannot be created |
+| Decision provenance | decision and evaluated object/rule/catalog versions | All evaluated mapping, BoundaryEvaluation, rule, catalog, and ontology revisions are recorded | Decision invalid and cannot be published |
+| Coverage distinction | coverage state and BoundaryEvaluation facts | Exactly one section 17 state is emitted; no-effective and incomplete are distinct; complete complementary set is effective | Coverage output invalid |
 
-Current implementation conflict: AP-007 has no MITRE technique ID and the model
-does not yet implement Threat Scenario objects. It therefore cannot currently
-satisfy invariant 8 without adding an internal technique or threat scenario.
-This is a migration requirement, not grounds for inventing a source fact.
+The current implementation does not yet have ThreatScenario objects. AP-007 also
+has no technique enrichment. Under the authoritative invariant, AP-007 and the
+other current paths cannot be treated as active Candidate-supporting paths until
+at least one active ThreatScenario is added to each. This is a migration
+requirement, not permission to invent source facts or silently grandfather the
+missing relationship.
 
 ## 20. Non-goals
 
@@ -717,46 +930,58 @@ authority.
 
 ## Implementation-readiness checklist
 
-- [ ] Approve the fact/mapping/inference/decision separation.
-- [ ] Resolve the `CAP-01` versus `CAP-###` identifier convention without silent
-      renumbering.
+- [x] Define the fact/mapping/inference/decision separation.
+- [x] Preserve `CAP-01`–`CAP-10` and define exact identifier grammars.
+- [x] Separate BoundaryDefinition, BoundarySetDefinition, and BoundaryEvaluation.
+- [x] Define atomic MitigationMapping and the three independent role dimensions.
+- [x] Define applicability, deployment state, decision scope, and confidence
+      thresholds.
+- [x] Define typed evidence, provenance types, lifecycle-reference rules, and
+      executable invariant outcomes.
 - [ ] Define first-class Pydantic models for Boundary, Boundary Set, Threat
       Scenario, Attack Technique, Security Outcome, Risk Explanation, Mapping
-      Provenance, and Mandatory Decision revision.
+      Provenance, BoundaryEvaluation, CompensatingControlEvaluation, and
+      Mandatory Decision revision.
 - [ ] Assign active lifecycle status and catalog versions to current capability
       and attack-path objects.
-- [ ] Give each current `BS-*` object an explicit related `BND-*` boundary.
-- [ ] Define threat scenarios or internal techniques for every active attack
-      path, including AP-007.
+- [ ] Give each current `BS-*` object an explicit related `BND-*` boundary and
+      migrate it to a BoundarySetDefinition.
+- [ ] Define at least one active ThreatScenario for every active attack path,
+      including AP-007; techniques remain optional enrichments.
 - [ ] Scope Source Recommendation identity beyond bare `control_id`.
-- [ ] Define evidence references as structured field/page/hash objects.
-- [ ] Define type-specific High, Medium, and Low confidence rules.
+- [ ] Implement typed evidence and the five provenance schemas.
+- [ ] Encode the normative High-confidence Candidate matrix.
 - [ ] Version deterministic mapping rules and ontology output.
-- [ ] Implement no-coverage, incomplete, and supporting-only coverage states.
+- [ ] Implement all six normative coverage states.
 - [ ] Add schema validation for all invariants in section 19.
 - [ ] Define migration and compatibility fixtures before changing exports.
 
 ## Open design decisions
 
-1. Whether new capability IDs use two or three digits, and how aliases are
-   represented if three-digit IDs are adopted.
-2. Whether `BND-*` represents a generic boundary type, a deployment-specific
-   boundary instance, or both through separate type/instance objects.
-3. Whether a boundary set may implement multiple composite boundaries directly
-   or must use an explicit composition object.
-4. The minimum granularity for threat scenarios and the criteria for path
+1. Whether composite security objectives require a separate composition object.
+   Until resolved, each BoundarySetDefinition MUST reference exactly one
+   BoundaryDefinition; composite behavior is expressed through related
+   boundaries, not a many-to-many implementation edge.
+2. The minimum granularity for threat scenarios and the criteria for path
    variants versus new AP identifiers.
-5. Whether internal techniques are mandatory when a suitable external technique
-   exists; external IDs alone must still remain non-authoritative enrichment.
-6. The formal expression language for applicability and compensating-control
-   conditions.
-7. Type-specific confidence criteria and how analyst disagreement is retained.
-8. Whether mitigation mappings are atomic per capability/path pair or can group
-   several paths when role, stage, evidence, and rationale are identical.
-9. How Definitive Mandatory approval expiry and re-review are triggered by
+   Until resolved, section 9 split criteria are normative and ambiguous scope
+   forces draft status or Review Required.
+3. The formal expression language for applicability and compensating-control
+   conditions. Until selected, conditions MUST be structured named predicates,
+   not executable free text; unresolvable predicates produce Review Required.
+4. Detailed type-specific criteria for Medium and Low confidence. High is fully
+   normative for Candidate decisions; Medium/Low remain descriptive and cannot
+   satisfy Candidate eligibility.
+5. How analyst disagreement is represented beyond separate ReviewProvenance
+   records. Until resolved, disagreement prevents High final-decision confidence.
+6. How Definitive Mandatory approval expiry and re-review are triggered by
    source, catalog, rule, or ontology changes.
-10. How residual paths are represented without prematurely introducing numeric
-    risk scoring.
+   Until resolved, any changed referenced revision invalidates approval and
+   requires re-review.
+7. How residual paths are represented as structured steps without prematurely introducing numeric
+   risk scoring.
+   Until resolved, a bounded attributable narrative is required and must name
+   the remaining entry condition, open step, and outcome.
 
 ## Migration impact on the current `security_knowledge` module
 
@@ -772,6 +997,9 @@ implement the full authoritative model:
 - `ControlAttackPathMapping` lacks mapping ID, source scope, boundary ID, threat
   and technique links, omitted path, compensating controls, non-compensability,
   applicability, method, rule version, ontology version, and review lineage.
+- `ControlAttackPathMapping` is currently atomic for attack path and capability,
+  but does not carry the new singular source identity, boundary-role enum,
+  BoundaryDefinition/BoundarySetDefinition distinction, or typed evidence IDs.
 - Boundary definitions currently live in the Mandatory module as `BS-*`
   structures. Boundary and boundary-set semantics are combined, and there are no
   first-class `BND-*` objects.
@@ -782,17 +1010,27 @@ implement the full authoritative model:
   canonical mapping objects become the source of aggregate exports.
 - Current confidence may inherit assessment confidence or become High from
   boundary recognition and evidence count. It is not yet independently derived
-  for every semantic layer.
+  for every semantic layer and therefore does not satisfy the normative
+  Candidate confidence matrix.
 - Current source lookup is keyed by bare `control_id`; canonical identity must be
   benchmark-scoped before multi-source ingestion is safe.
 - Current coverage marks a boundary/path incomplete when any mapped assessment
   is Review Required. It does not yet evaluate explicit prerequisites, required
-  effects, selected alternatives, or residual paths.
+  effects, selected alternatives, accepted compensation, residual paths, or the
+  six normative coverage states. Its “no primary mitigation” output must not be
+  interpreted as a preventive gap when a complementary core set is complete.
 - The current `boundary_set_role` export uses `standalone` and `core member`,
   while the relationship model uses the fuller normative role names. A migration
   must define one canonical enum and backward-compatible serialization.
 - The current `attack_path_if_omitted` field is a narrative on boundary
   membership, not a structured residual attack-path reference.
+- Current attack paths have no ThreatScenario references. Under section 19 they
+  cannot yet be active Candidate-supporting catalog objects; migration must add
+  curated scenarios before enforcing the new invariant against existing output.
+- Current exports do not distinguish applicability mode from deployment state or
+  benchmark scope from environment scope.
+- Current provenance is embedded in source records and evidence excerpts rather
+  than represented by the five normative provenance types.
 
 Migration MUST be additive first: introduce versioned canonical objects and
 links, populate them from existing deterministic rules, preserve current export
@@ -804,19 +1042,44 @@ ambiguous fields.
 The next phase should implement the minimum ontology foundation, not storage or
 AI integration:
 
-1. Add versioned Pydantic schemas for Boundary, Boundary Set, Threat Scenario,
-   Attack Technique, Security Outcome, Mapping Provenance, and decision revision.
+1. Add versioned Pydantic schemas for BoundaryDefinition,
+   BoundarySetDefinition, BoundaryEvaluation, ThreatScenario, AttackTechnique,
+   SecurityOutcome, typed evidence, the five provenance types,
+   CompensatingControlEvaluation, and MandatoryDecision revision.
 2. Convert the eight current Windows Server boundary families into catalog data
    with separate `BND-*` and `BS-*` identities.
-3. Define at least one threat scenario and one internal or external technique for
-   every current attack path; resolve AP-007 first.
+3. Define at least one active threat scenario for every current attack path;
+   resolve AP-007 first. Technique mappings are optional enrichments.
 4. Replace bare control-ID joins with benchmark-scoped source identity.
-5. Produce atomic, versioned mitigation mappings while retaining the existing
-   `MandatoryAssessment` aggregate fields and CSV columns.
-6. Implement the validation invariants and richer qualitative coverage states.
+5. Produce atomic, versioned mitigation mappings with independent boundary role,
+   mitigation role, and strength while retaining existing aggregate fields and
+   CSV columns.
+6. Implement the executable validation invariants, applicability/deployment
+   matrix, and six qualitative coverage states.
 7. Run a decision-parity migration against the current Windows Server fixture
    and require explicit review for every changed Candidate Mandatory result.
 
 AI analyst, independent reviewer, persistence, APIs, and customer overlays
 should follow only after this deterministic ontology foundation and its
 migration behavior are stable.
+
+## Review-resolution table
+
+| Finding | Resolved section | Resolution summary | Remaining open question |
+|---:|---|---|---|
+| 1 | 6, 11, 12, 19 | Separated `boundary_role`, `mitigation_role`, and `mitigation_strength`; Candidate rules reference each correctly. | None. |
+| 2 | 9, 14 | Removed mapping IDs from AttackPath and made inverse relationships derived from atomic mappings. | Shape of any future generic curated-mitigation catalog is intentionally deferred; it cannot be a source mapping. |
+| 3 | 6, 15 | Defined BoundaryDefinition, BoundarySetDefinition, and BoundaryEvaluation with normative ownership and IDs. | Composite boundary composition remains constrained to one boundary per set until a separate composition concept is approved. |
+| 4 | 12, 13, 19 | Defined High-confidence thresholds for every Candidate dependency and exact failure outcome. | Detailed Medium/Low criteria remain open but cannot qualify a Candidate. |
+| 5 | 11, 12, 19 | Separated applicability mode, deployment state, and decision scope with a valid-combination table. | Formal condition-expression syntax remains open; unresolved predicates force review. |
+| 6 | 17, 19 | Replaced no-primary gap semantics with six mutually exclusive coverage states; complete complementary sets are effective. | None. |
+| 7 | 11 | Made MitigationMapping atomic with singular semantic targets and tightly limited list fields. | None. |
+| 8 | 14 | Made MitigationMapping the authoritative reified relationship; direct edges are projections only. | None. |
+| 9 | 15 | Defined exact regex grammars, preserved CAP-01–CAP-10, and specified normalization, authority, uniqueness, and collision handling. | None. |
+| 10 | 13 | Defined five distinct provenance types and prohibited false CIS provenance on reusable catalog objects. | None. |
+| 11 | 8, 9, 19 | Required every active path to reference an active scenario; technique-only paths are draft and Candidate-ineligible. | Scenario granularity remains governed by section 9 split rules pending further catalog experience. |
+| 12 | 3, 10 | Split AttackPath-to-Outcome from contextual Risk derivation; generic Mandatory decisions need no customer Risk object. | Structured residual-risk scoring remains out of scope. |
+| 13 | 6, 11, 19 | Added CompensatingControlEvaluation and strict equivalence acceptance rules. | Condition-expression syntax remains open; free text cannot establish equivalence. |
+| 14 | 19 | Replaced qualitative invariants with required fields, predicates, success conditions, and failure outcomes. | None for Candidate validation; schemas still need implementation. |
+| 15 | 13, 19 | Added typed evidence categories and mandatory evidence-item fields. | None. |
+| 16 | 16, 19 | Restricted new references to active objects and confined obsolete references to explicit historical mode. | Approval expiry timing remains open; any referenced revision change currently forces re-review. |

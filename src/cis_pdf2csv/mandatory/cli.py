@@ -6,6 +6,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from cis_pdf2csv.schema import ControlRecord
+from cis_pdf2csv.security_knowledge.exporters import write_coverage_json
 
 from .exporters import write_assessment_csv, write_summary_json
 from .pipeline import assess_controls
@@ -43,6 +44,10 @@ def main(argv: list[str] | None = None) -> int:
         output.with_name(f"{output.stem}-review-required.csv"),
     )
     write_summary_json(assessments, output.with_name(f"{output.stem}-summary.json"))
+    write_coverage_json(
+        assessments,
+        output.with_name(f"{output.stem}-attack-path-coverage.json"),
+    )
     return 0
 
 

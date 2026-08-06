@@ -167,8 +167,8 @@ def test_related_grouping_and_primary_versus_supporting() -> None:
     )
     results = {item.control_id: item for item in assess_controls([supporting, primary])}
     assert results["3.2.2"].control_id in results["3.2.1"].related_control_ids
-    assert results["3.2.1"].relationship == "primary boundary control"
-    assert results["3.2.2"].relationship == "supporting control"
+    assert results["3.2.1"].relationship == "standalone primary boundary"
+    assert results["3.2.2"].relationship == "supporting hardening"
     assert results["3.2.2"].proposal == "Regular Control"
 
 
@@ -178,7 +178,7 @@ def test_fine_tuning_related_control_is_excluded() -> None:
         control("4.1.2", "Set security audit log retention period"),
     ]
     result = {item.control_id: item for item in assess_controls(items)}["4.1.2"]
-    assert result.relationship == "fine-tuning control"
+    assert result.relationship == "fine-tuning"
     assert result.proposal == "Regular Control"
 
 
@@ -239,10 +239,207 @@ def test_benchmark_sized_analysis_is_fast_and_functionally_stable() -> None:
     assert len(results) == 452
     assert duration < 5.0
     assert by_id["200.1.1"].proposal == "Candidate Mandatory"
-    assert by_id["200.1.1"].relationship == "primary boundary control"
+    assert by_id["200.1.1"].relationship == "standalone primary boundary"
     assert by_id["200.1.2"].proposal == "Regular Control"
-    assert by_id["200.1.2"].relationship == "supporting control"
+    assert by_id["200.1.2"].relationship == "supporting hardening"
     assert all(by_id[f"100.{index}.1"].proposal == "Regular Control" for index in range(450))
+
+
+def test_windows_server_l1_false_positive_regression_fixture() -> None:
+    fixture_path = Path(__file__).parent / "fixtures" / "mandatory_windows_server_l1_regression.json"
+    cases: list[dict[str, Any]] = json.loads(fixture_path.read_text(encoding="utf-8"))
+    controls = [
+        neutral_control(
+            control_id=case["control_id"],
+            title=case["title"],
+            description=case["title"],
+            rationale=case["rationale"],
+            remediation=case["title"],
+            applicability=case.get("applicability", "All invented server systems"),
+        )
+        for case in cases
+    ]
+
+    forward = {item.control_id: item for item in assess_controls(controls)}
+    reverse = {item.control_id: item for item in assess_controls(reversed(controls))}
+    assert [item.model_dump() for item in forward.values()] == [
+        item.model_dump() for item in reverse.values()
+    ]
+    for case in cases:
+        assessment = forward[case["control_id"]]
+        assert assessment.proposal == case["expected_proposal"]
+        assert assessment.relationship == case["expected_relationship"]
+        if assessment.proposal == "Candidate Mandatory":
+            assert assessment.non_compensable_reason
+            assert "If omitted" in assessment.non_compensable_reason
+            assert "non-compensable" in assessment.non_compensable_reason
+
+
+def set_control(control_id: str, title: str) -> ControlRecord:
+    return neutral_control(
+        control_id=control_id,
+        title=title,
+        description=f"{title} directly enforces its named security effect.",
+        rationale=f"{title} closes a distinct attack path in the minimum effective boundary.",
+        remediation=title,
+    )
+
+
+def assert_complete_core_set(
+    controls: list[ControlRecord],
+    boundary_set_id: str,
+) -> dict[str, Any]:
+    results = assess_controls(controls)
+    assert all(item.proposal == "Candidate Mandatory" for item in results)
+    assert all(item.relationship == "boundary-set core member" for item in results)
+    assert all(item.boundary_set_id == boundary_set_id for item in results)
+    assert all(item.overlap_type in {"none", "complementary"} for item in results)
+    for item in results:
+        assert item.enforced_sub_boundary
+        assert item.attack_path_if_omitted
+        assert item.remaining_members_cannot_compensate
+        assert item.related_core_member_ids
+    return {item.control_id: item.model_dump() for item in results}
+
+
+def test_complete_and_incomplete_firewall_boundary_sets() -> None:
+    enabled = set_control("9.1.1", "Windows Firewall Domain firewall state enabled")
+    inbound = set_control("9.1.2", "Windows Firewall Domain inbound connections block by default")
+    complete = assert_complete_core_set(
+        [enabled, inbound],
+        "BS-HOST-FIREWALL-DOMAIN",
+    )
+    assert complete["9.1.1"]["overlap_type"] == "complementary"
+
+    incomplete = assess_controls([enabled])[0]
+    assert incomplete.proposal == "Review Required"
+    assert "default_inbound_block" in (incomplete.review_note or "")
+
+
+def test_smb_version_and_signing_are_complementary_core_members() -> None:
+    assert_complete_core_set(
+        [
+            set_control("18.6.1", "Require minimum supported SMB version"),
+            set_control("18.6.2", "Require SMB signing"),
+        ],
+        "BS-SMB-SECURITY",
+    )
+
+
+def test_ldap_signing_and_encryption_are_complementary_core_members() -> None:
+    assert_complete_core_set(
+        [
+            set_control("2.3.1", "Require LDAP signing"),
+            set_control("2.3.2", "Require LDAP encryption"),
+        ],
+        "BS-LDAP-SECURITY",
+    )
+
+
+def test_ntlm_authentication_and_session_security_form_a_boundary() -> None:
+    assert_complete_core_set(
+        [
+            set_control("2.3.3", "Refuse LM credentials and refuse NTLM credentials"),
+            set_control("2.3.4", "Require NTLM minimum session security with 128-bit session encryption"),
+        ],
+        "BS-NTLM-SESSION",
+    )
+
+
+def test_winrm_encrypted_management_is_mandatory_when_deployed() -> None:
+    results = assert_complete_core_set(
+        [
+            set_control("18.10.1", "Disable WinRM Basic authentication"),
+            set_control("18.10.2", "Disable WinRM unencrypted traffic"),
+            set_control("18.10.3", "WinRM credential storage is disabled"),
+        ],
+        "BS-WINRM-SECURITY",
+    )
+    assert all(item["applicability_mode"] == "mandatory_when_deployed" for item in results.values())
+
+
+def test_winrm_client_and_service_controls_are_complementary_not_duplicates() -> None:
+    controls = [
+        set_control("18.10.1", "Disable WinRM Client Basic authentication"),
+        set_control("18.10.2", "Disable WinRM Service Basic authentication"),
+        set_control("18.10.3", "Disable WinRM Client unencrypted traffic"),
+        set_control("18.10.4", "Disable WinRM Service unencrypted traffic"),
+    ]
+    results = assert_complete_core_set(controls, "BS-WINRM-SECURITY")
+    assert all(item["overlap_type"] == "complementary" for item in results.values())
+
+
+def test_rdp_secure_access_boundary_is_mandatory_when_deployed() -> None:
+    results = assert_complete_core_set(
+        [
+            set_control("18.10.4", "Require Network Level Authentication for RDP connections"),
+            set_control("18.10.5", "Require SSL security layer for RDP connections"),
+            set_control("18.10.6", "Require RDP high encryption level"),
+        ],
+        "BS-RDP-SECURITY",
+    )
+    assert all(item["applicability_mode"] == "mandatory_when_deployed" for item in results.values())
+
+
+def test_defender_minimum_protection_stack_excludes_supplemental_scans() -> None:
+    core = [
+        set_control("18.10.7", "Enable real-time malware protection"),
+        set_control("18.10.8", "Enable behavior monitoring"),
+        set_control("18.10.9", "Enable network protection in block mode"),
+        set_control("18.10.10", "Enable EDR in block mode"),
+    ]
+    results = assert_complete_core_set(core, "BS-MALWARE-PROTECTION")
+    assert all(item["applicability_mode"] == "mandatory_when_deployed" for item in results.values())
+
+    scan = assess_controls([neutral_control(title="Schedule Defender removable-drive scans")])[0]
+    assert scan.proposal == "Regular Control"
+    assert scan.relationship == "supporting hardening"
+
+    oobe = assess_controls(
+        [neutral_control(title="Configure real-time protection during OOBE")]
+    )[0]
+    assert oobe.proposal == "Regular Control"
+    assert oobe.relationship == "supporting hardening"
+
+
+def test_duplicate_effect_requires_review_but_complementary_effect_does_not() -> None:
+    results = {
+        item.control_id: item
+        for item in assess_controls(
+            [
+                set_control("9.2.1", "Windows Firewall Private firewall state enabled"),
+                set_control("9.2.2", "Windows Firewall Private firewall enabled"),
+                set_control("9.2.3", "Windows Firewall Private inbound connections block by default"),
+            ]
+        )
+    }
+    assert results["9.2.1"].proposal == "Review Required"
+    assert results["9.2.2"].proposal == "Review Required"
+    assert results["9.2.1"].overlap_type == "duplicate"
+    assert results["9.2.3"].proposal == "Candidate Mandatory"
+    assert results["9.2.3"].overlap_type == "complementary"
+
+
+def test_firewall_logging_and_fine_tuning_are_not_core_members() -> None:
+    controls = [
+        set_control("9.3.1", "Windows Firewall Public logging filename"),
+        set_control("9.3.2", "Windows Firewall Public logging size limit"),
+        set_control("9.3.3", "Windows Firewall Public display notification"),
+        set_control("9.3.4", "Windows Firewall Public logging successful connections"),
+    ]
+    results = assess_controls(controls)
+    assert all(item.proposal == "Regular Control" for item in results)
+    assert all(item.boundary_set_id is None for item in results)
+
+
+def test_boundary_set_results_are_deterministic_across_input_order() -> None:
+    controls = [
+        set_control("18.6.10", "Require minimum supported SMB version"),
+        set_control("18.6.11", "Require SMB signing"),
+    ]
+    forward = [item.model_dump() for item in assess_controls(controls)]
+    reverse = [item.model_dump() for item in assess_controls(reversed(controls))]
+    assert forward == reverse
 
 
 def test_csv_and_json_export(tmp_path: Path) -> None:

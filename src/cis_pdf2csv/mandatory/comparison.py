@@ -5,12 +5,49 @@ from difflib import SequenceMatcher
 
 from cis_pdf2csv.schema import ControlRecord
 
+from .boundary_sets import BoundaryContext
 from .features import ControlFeatures
 from .schema import Relationship
 
 MAX_RATIONALE_COMPARISON_LENGTH = 512
 MIN_RATIONALE_TITLE_SIMILARITY = 0.15
 MIN_RATIONALE_SUBJECT_OVERLAP = 0.20
+AUDIT_MARKERS = ("audit ", "auditing ")
+PREREQUISITE_MARKERS = ("prerequisite", "required for enforcement", "required for protection to function")
+INFORMATION_HIDING_MARKERS = (
+    "display", "hide", "visibility", "notification", "rename administrator",
+    "rename the built-in administrator", "account details", "sign-in information",
+)
+OPERATIONAL_MARKERS = (
+    "temporary folder", "temp folder", "auto-restart", "shutdown behavior",
+    "session usability", "lifecycle", "scan schedule", "scheduled scan",
+)
+MALWARE_SUPPORTING_MARKERS = (
+    "scan removable", "removable-drive scan", "quick scan", "scan excluded", "exclusions are visible",
+    "visibility of exclusions", "scan scheduling", "notification behavior", "during oobe",
+)
+SUPPORTING_HARDENING_MARKERS = (
+    "behavior of the elevation prompt", "detect application installations",
+    "only elevate uiaccess", "enumerate administrator accounts",
+)
+PRIMARY_OVERRIDE_MARKERS = (
+    "real-time protection", "behavior monitoring", "edr in block mode",
+    "network protection in block mode", "admin approval mode enabled",
+    "run all administrators in admin approval mode",
+)
+PRIMARY_ACTION_MARKERS = (
+    " block", "block ", " deny", "deny ", " disable", "disabled", " disallow",
+    " refuse", "restrict anonymous", " require", "required", " enforce",
+    "do not store", "not stored", "do not send", "admin approval mode enabled",
+)
+BOUNDARY_SUBJECT_MARKERS = (
+    "authentication", "credential", "password", "privileged", "admin approval",
+    "user account control", "remote access", "remote desktop", "rdp", "winrm",
+    "remote shell", "redirection", "firewall", "network protection", "encryption",
+    "unencrypted", "plaintext", "signing", "sandbox", "application control",
+    "real-time protection", "behavior monitoring", "edr", "malware protection",
+    "ntlm", "lan manager", "smbv1", "legacy protocol", "unsafe mechanism",
+)
 
 
 @dataclass(frozen=True)
@@ -33,7 +70,11 @@ def _compatible_applicability(left: str, right: str) -> bool:
     return not left or not right or left == right
 
 
-def compare_controls(controls: list[ControlRecord], features: list[ControlFeatures]) -> list[ComparisonResult]:
+def compare_controls(
+    controls: list[ControlRecord],
+    features: list[ControlFeatures],
+    boundary_contexts: list[BoundaryContext],
+) -> list[ComparisonResult]:
     count = len(controls)
     benchmark_keys = [(item.benchmark_name, item.benchmark_version) for item in controls]
     profiles = [_normalize(item.profile) for item in controls]
@@ -46,7 +87,6 @@ def compare_controls(controls: list[ControlRecord], features: list[ControlFeatur
     ]
     subjects = [item.subjects for item in features]
     related: list[set[str]] = [set() for _ in controls]
-    duplicates = [False] * count
 
     # Each unordered pair is considered exactly once. Similarity work happens
     # only after benchmark, scope, hierarchy and subject gates have passed.
@@ -93,27 +133,57 @@ def compare_controls(controls: list[ControlRecord], features: list[ControlFeatur
 
             related[left_index].add(controls[right_index].control_id)
             related[right_index].add(controls[left_index].control_id)
-            if title_similarity >= 0.9:
-                duplicates[left_index] = True
-                duplicates[right_index] = True
 
     results: list[ComparisonResult] = []
-    for index, _control in enumerate(controls):
-        text = features[index].criterion_text
-        if duplicates[index]:
-            relationship: Relationship = "duplicate or overlapping control"
+    for index, control in enumerate(controls):
+        text = _normalize(control.title)
+        supporting = (
+            any(marker in text for marker in MALWARE_SUPPORTING_MARKERS)
+            or any(marker in text for marker in SUPPORTING_HARDENING_MARKERS)
+            or (
+                bool(related[index])
+                and any(
+                    marker in text
+                    for marker in ("additional", "supporting", "supplemental", "enhance", "prerequisite")
+                )
+            )
+        )
+        boundary = boundary_contexts[index].membership
+        if boundary and boundary.standalone:
+            relationship: Relationship = "standalone primary boundary"
+        elif boundary:
+            relationship = "boundary-set core member"
+        elif any(marker in text for marker in PREREQUISITE_MARKERS):
+            relationship = "prerequisite"
         elif any(marker in text for marker in ("timeout", "threshold", "log size", "retention period", "frequency", "duration")):
-            relationship = "fine-tuning control"
-        elif related[index] and any(marker in text for marker in ("additional", "supporting", "supplemental", "enhance", "prerequisite")):
-            relationship = "supporting control"
+            relationship = "fine-tuning"
+        elif any(marker in text for marker in AUDIT_MARKERS):
+            if (
+                any(marker in text for marker in ("essential", "sole source"))
+                and any(marker in text for marker in ("privilege escalation", "credential theft", "malware execution", "security state", "system integrity", "account compromise"))
+            ):
+                relationship = "standalone primary boundary"
+            else:
+                relationship = "detection-only"
+        elif any(marker in text for marker in INFORMATION_HIDING_MARKERS):
+            relationship = "information-hiding"
+        elif any(marker in text for marker in OPERATIONAL_MARKERS):
+            relationship = "operational"
+        elif supporting:
+            relationship = "supporting hardening"
+        elif any(marker in text for marker in PRIMARY_OVERRIDE_MARKERS):
+            relationship = "standalone primary boundary"
         elif any(marker in text for marker in ("monitor", "alert", "report", "detect only", "detection only")):
-            relationship = "detection-only control"
-        elif any(marker in text for marker in ("block", "deny", "disable", "prevent", "prohibit", "require", "enforce")):
-            relationship = "primary boundary control"
+            relationship = "detection-only"
+        elif (
+            any(marker in f" {text}" for marker in PRIMARY_ACTION_MARKERS)
+            and any(marker in text for marker in BOUNDARY_SUBJECT_MARKERS)
+        ):
+            relationship = "standalone primary boundary"
         elif related[index]:
-            relationship = "supporting control"
+            relationship = "supporting hardening"
         else:
-            relationship = "independent control"
+            relationship = "operational"
 
         results.append(ComparisonResult(tuple(sorted(related[index])), relationship))
     return results

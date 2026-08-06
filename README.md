@@ -430,6 +430,10 @@ and limitations.
 cis-mandatory-analyze controls.jsonl -o mandatory-review.csv
 ```
 
+Mandatory output is enriched with deterministic security capabilities and
+attack paths. See [Security Knowledge Phase 1](docs/security-knowledge-phase1.md)
+for mapping semantics, coverage reporting, and limitations.
+
 ---
 
 # License

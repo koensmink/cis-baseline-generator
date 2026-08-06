@@ -14,6 +14,16 @@ def _row(assessment: MandatoryAssessment) -> dict[str, object]:
     data["mandatory_criteria"] = ";".join(assessment.mandatory_criteria)
     data["exclusion_reasons"] = ";".join(assessment.exclusion_reasons)
     data["related_control_ids"] = ";".join(assessment.related_control_ids)
+    data["capability_ids"] = ";".join(assessment.capability_ids)
+    data["attack_path_ids"] = ";".join(assessment.attack_path_ids)
+    data["attack_path_names"] = ";".join(assessment.attack_path_names)
+    data["attack_stages"] = ";".join(assessment.attack_stages)
+    data["mitigation_roles"] = ";".join(assessment.mitigation_roles)
+    data["mitigation_strengths"] = ";".join(assessment.mitigation_strengths)
+    data["mapping_confidences"] = ";".join(assessment.mapping_confidences)
+    data["attack_path_mappings"] = json.dumps(
+        [item.model_dump() for item in assessment.attack_path_mappings], ensure_ascii=False
+    )
     data["benchmark_evidence"] = json.dumps(
         [item.model_dump() for item in assessment.benchmark_evidence], ensure_ascii=False
     )

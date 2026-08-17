@@ -20,12 +20,18 @@ DOMAIN_TERMS: dict[str, tuple[str, ...]] = {
         "sign-in", "reauthentication", "authentication transfer", "device trust",
     ),
     "privileged_role_activation": ("role activation", "privileged role", "eligible role"),
-    "application_registration_and_consent": ("register applications", "application consent", "admin consent"),
+    "application_registration_and_consent": (
+        "application registration", "register applications", "application consent",
+        "user consent", "admin consent", "permission grant",
+    ),
     "external_collaboration_and_guest_trust": ("guest", "external collaboration", "external user"),
     "mail_security": ("dmarc", "dkim", "spf", "anti-phishing", "anti-spam", "mail flow"),
     "auditing_and_retention": ("audit", "retention"),
     "data_protection": ("dlp", "data loss prevention", "sensitivity label"),
-    "service_principal_authorization": ("service principal",),
+    "service_principal_authorization": (
+        "service principal", "application permission", "app-only permission",
+        "workload identity", "federated identity credential",
+    ),
     "meeting_federation_cross_tenant": ("meeting", "federation", "cross-tenant", "external teams"),
 }
 
@@ -207,6 +213,38 @@ class Microsoft365Adapter(BenchmarkFamilyAdapter):
                 "boundary_set_core_member",
                 _managed_device_trust(behavior),
             ),
+            (
+                "SEM-APPLICATION-REGISTRATION-AUTHORIZATION",
+                "application_registration_and_consent",
+                "application identity creation is restricted and accountable",
+                _application_registration_effects(behavior),
+                "boundary_set_core_member",
+                _application_registration_authorization(behavior),
+            ),
+            (
+                "SEM-APPLICATION-CONSENT-AUTHORIZATION",
+                "application_registration_and_consent",
+                "application permission grants are constrained by enforced approval",
+                _application_consent_effects(behavior),
+                "boundary_set_core_member",
+                _application_consent_authorization(behavior),
+            ),
+            (
+                "SEM-SERVICE-PRINCIPAL-AUTHORIZATION",
+                "service_principal_authorization",
+                "non-human principal authority is explicitly least-privilege constrained",
+                _service_principal_effects(behavior),
+                "boundary_set_core_member",
+                _service_principal_authorization(behavior),
+            ),
+            (
+                "SEM-WORKLOAD-IDENTITY-TRUST",
+                "service_principal_authorization",
+                "workload authentication trust is bound to an intended external identity",
+                _workload_identity_trust_effects(behavior),
+                "boundary_set_core_member",
+                _workload_identity_trust(behavior),
+            ),
         )
         candidates: list[BoundaryCandidate] = []
         for mapping, domain, effect, sub_boundaries, role, matches in rules:
@@ -374,6 +412,98 @@ def _requires_managed_device(text: str) -> bool:
     )
 
 
+def _application_registration_authorization(text: str) -> bool:
+    return _contains_all(
+        text,
+        (
+            ("application registration", "register applications", "application identities"),
+            ("restrict", "restricted", "only authorized", "deny", "prevent"),
+            ("owner", "ownership", "accountable", "approved role", "authorized role"),
+        ),
+    )
+
+
+def _application_registration_effects(text: str) -> tuple[str, ...]:
+    effects: list[str] = []
+    if any(term in text for term in ("restrict", "restricted", "only authorized", "deny", "prevent")):
+        effects.append("application identity creation restricted")
+    if any(term in text for term in ("approved role", "authorized role", "authorized administrator")):
+        effects.append("application registrar authority constrained")
+    if any(term in text for term in ("owner", "ownership", "accountable")):
+        effects.append("application ownership accountability established")
+    return tuple(effects)
+
+
+def _application_consent_authorization(text: str) -> bool:
+    return _contains_all(
+        text,
+        (
+            ("application consent", "user consent", "admin consent", "permission grant"),
+            ("require approval", "requires approval", "approval is required", "restrict", "block", "deny"),
+            ("permission", "scope", "privileged"),
+        ),
+    )
+
+
+def _application_consent_effects(text: str) -> tuple[str, ...]:
+    effects: list[str] = []
+    if any(term in text for term in ("user consent", "application consent", "permission grant")) and any(
+        term in text for term in ("restrict", "block", "deny", "only authorized")
+    ):
+        effects.append("untrusted application consent restricted")
+    if any(term in text for term in ("admin consent", "administrator approval", "approval is required", "requires approval")):
+        effects.append("privileged permission grant independently approved")
+    if any(term in text for term in ("least privilege", "minimum permission", "permission scope", "requested scope")):
+        effects.append("permission grant scope constrained")
+    return tuple(effects)
+
+
+def _service_principal_authorization(text: str) -> bool:
+    return _contains_all(
+        text,
+        (
+            ("service principal", "app-only permission", "non-human principal"),
+            ("least privilege", "minimum permission", "restrict", "restricted"),
+            ("authorize", "authorization", "permission", "role assignment"),
+        ),
+    )
+
+
+def _service_principal_effects(text: str) -> tuple[str, ...]:
+    effects: list[str] = []
+    if any(term in text for term in ("least privilege", "minimum permission", "restricted permission")):
+        effects.append("non-human principal privilege constrained")
+    if any(term in text for term in ("explicitly authorized", "authorization", "approved role assignment")):
+        effects.append("non-human principal authorization explicit")
+    if any(term in text for term in ("review", "expire", "expiration", "remove unused", "revoke")):
+        effects.append("non-human principal authorization lifecycle enforced")
+    return tuple(effects)
+
+
+def _workload_identity_trust(text: str) -> bool:
+    return _contains_all(
+        text,
+        (
+            ("workload identity", "federated identity credential", "workload federation"),
+            ("issuer",),
+            ("subject",),
+            ("audience",),
+            ("validate", "validated", "match", "bound", "restrict"),
+        ),
+    )
+
+
+def _workload_identity_trust_effects(text: str) -> tuple[str, ...]:
+    effects: list[str] = []
+    if "issuer" in text and any(term in text for term in ("validate", "validated", "match", "bound", "restrict")):
+        effects.append("workload identity issuer constrained")
+    if "subject" in text and any(term in text for term in ("validate", "validated", "match", "bound", "restrict")):
+        effects.append("workload identity subject constrained")
+    if "audience" in text and any(term in text for term in ("validate", "validated", "match", "bound", "restrict")):
+        effects.append("workload identity audience constrained")
+    return tuple(effects)
+
+
 def _evaluation_scope(control: ControlRecord) -> str:
     text = _all_behavior(control)
     if "intune enrollment" in text:
@@ -386,6 +516,14 @@ def _evaluation_scope(control: ControlRecord) -> str:
         resource = "service:sharepoint"
     elif "streaming and push datasets" in text or "resourcekey" in text:
         resource = "feature:power_bi_streaming_push"
+    elif "workload identity" in text or "federated identity credential" in text:
+        resource = "tenant:workload_identities"
+    elif "service principal" in text or "app-only permission" in text:
+        resource = "tenant:service_principals"
+    elif "application consent" in text or "admin consent" in text or "user consent" in text:
+        resource = "tenant:application_consent"
+    elif "application registration" in text or "register applications" in text:
+        resource = "tenant:application_registration"
     else:
         resource = "benchmark"
     title = control.title.lower()

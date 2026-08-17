@@ -23,6 +23,10 @@ _MAPPINGS = (
     ("SEM-SESSION-ASSURANCE", "BS-IDENTITY-SESSION-ASSURANCE", "BND-IDENTITY-SESSION-ASSURANCE", ("CAP-01", "CAP-02"), ("AP-020",), "Semantic mapping for authentication freshness and session assurance."),
     ("SEM-AUTHENTICATION-SESSION-BINDING", "BS-IDENTITY-AUTHENTICATION-SESSION-BINDING", "BND-IDENTITY-AUTHENTICATION-SESSION-BINDING", ("CAP-01", "CAP-02", "CAP-08"), ("AP-019",), "Semantic mapping for blocked authentication transfer and bound authenticated state."),
     ("SEM-MANAGED-DEVICE-AUTHENTICATION-TRUST", "BS-IDENTITY-MANAGED-DEVICE-TRUST", "BND-IDENTITY-MANAGED-DEVICE-TRUST", ("CAP-01", "CAP-08"), ("AP-021",), "Semantic mapping for device trust enforced at authentication."),
+    ("SEM-APPLICATION-REGISTRATION-AUTHORIZATION", "BS-IDENTITY-APPLICATION-REGISTRATION-AUTHORIZATION", "BND-IDENTITY-APPLICATION-REGISTRATION-AUTHORIZATION", ("CAP-01", "CAP-03"), ("AP-023",), "Semantic mapping for restricted, accountable application identity creation."),
+    ("SEM-APPLICATION-CONSENT-AUTHORIZATION", "BS-IDENTITY-APPLICATION-CONSENT-AUTHORIZATION", "BND-IDENTITY-APPLICATION-CONSENT-AUTHORIZATION", ("CAP-01", "CAP-03"), ("AP-024",), "Semantic mapping for enforced application permission consent and approval."),
+    ("SEM-SERVICE-PRINCIPAL-AUTHORIZATION", "BS-IDENTITY-SERVICE-PRINCIPAL-AUTHORIZATION", "BND-IDENTITY-SERVICE-PRINCIPAL-AUTHORIZATION", ("CAP-01", "CAP-03"), ("AP-025",), "Semantic mapping for explicit least-privilege non-human principal authorization."),
+    ("SEM-WORKLOAD-IDENTITY-TRUST", "BS-IDENTITY-WORKLOAD-IDENTITY-TRUST", "BND-IDENTITY-WORKLOAD-IDENTITY-TRUST", ("CAP-01", "CAP-02", "CAP-08"), ("AP-026",), "Semantic mapping for claim-bound federated workload identity trust."),
 )
 
 LEGACY_MIGRATION_MAP = tuple(

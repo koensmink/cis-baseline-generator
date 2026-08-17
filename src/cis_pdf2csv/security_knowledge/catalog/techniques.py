@@ -21,6 +21,10 @@ _TECHNIQUES = (
     ("TEC-015", "Multifactor authentication bypass", "Defeat or abuse an additional authentication factor through fatigue, interception, or weak factor choice.", "authentication", None),
     ("TEC-016", "Session token replay", "Reuse authenticated session material outside its intended context.", "credential access", None),
     ("TEC-017", "Device trust bypass", "Present missing, false, or transferred device trust context to an authentication decision.", "defense evasion", None),
+    ("TEC-018", "Unauthorized application identity creation", "Create an application identity outside the intended administrative registration process.", "persistence", None),
+    ("TEC-019", "Application permission grant abuse", "Induce or exercise an overbroad delegated or administrative application permission grant.", "privilege escalation", None),
+    ("TEC-020", "Non-human principal privilege abuse", "Use excessive or stale non-human principal authorization to access protected resources.", "privilege escalation", None),
+    ("TEC-021", "Workload federation trust abuse", "Present a federated workload token whose claims are accepted outside the intended trust relationship.", "credential access", None),
 )
 
 TECHNIQUES = tuple(

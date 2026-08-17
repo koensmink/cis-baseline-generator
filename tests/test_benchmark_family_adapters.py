@@ -393,3 +393,128 @@ def test_mapping_order_is_deterministic_for_multiple_boundaries() -> None:
     assert assess_controls_shadow([first, second]).model_dump() == assess_controls_shadow(
         [second, first]
     ).model_dump()
+
+
+@pytest.mark.parametrize(
+    ("description", "rationale", "remediation", "mapping_id", "boundary_id"),
+    [
+        (
+            "Application registration is restricted to an approved role.",
+            "Accountable ownership prevents attacker-controlled application identities.",
+            "Restrict application identity creation to an authorized role and require an owner.",
+            "SEM-APPLICATION-REGISTRATION-AUTHORIZATION",
+            "BND-IDENTITY-APPLICATION-REGISTRATION-AUTHORIZATION",
+        ),
+        (
+            "User consent is restricted and privileged application permissions require admin consent.",
+            "Independent administrator approval prevents excessive permission grants.",
+            "Block untrusted application consent, require approval, and constrain permission scope to least privilege.",
+            "SEM-APPLICATION-CONSENT-AUTHORIZATION",
+            "BND-IDENTITY-APPLICATION-CONSENT-AUTHORIZATION",
+        ),
+        (
+            "Each service principal is explicitly authorized with minimum permissions.",
+            "A stale app-only permission permits excessive resource access.",
+            "Enforce least privilege, approved role assignment, and review and revoke unused authorization.",
+            "SEM-SERVICE-PRINCIPAL-AUTHORIZATION",
+            "BND-IDENTITY-SERVICE-PRINCIPAL-AUTHORIZATION",
+        ),
+        (
+            "A federated workload identity validates its issuer, subject, and audience.",
+            "Claim binding prevents a token from another workload context being accepted.",
+            "Restrict and validate the issuer, subject, and audience of each federated identity credential.",
+            "SEM-WORKLOAD-IDENTITY-TRUST",
+            "BND-IDENTITY-WORKLOAD-IDENTITY-TRUST",
+        ),
+    ],
+)
+def test_m365_application_and_workload_identity_complete_boundaries(
+    description: str,
+    rationale: str,
+    remediation: str,
+    mapping_id: str,
+    boundary_id: str,
+) -> None:
+    item = invented_control(
+        title="Configure an invented application identity safeguard",
+        description=description,
+        rationale=rationale,
+        remediation=remediation,
+    )
+    candidates = Microsoft365Adapter().identify_boundary_candidates(item)
+    assert {candidate.semantic_mapping_id for candidate in candidates} == {mapping_id}
+    assessment = assess_controls_shadow([item]).shadow_assessments[0]
+    assert assessment.normative_boundary_definition_ids == (boundary_id,)
+    assert assessment.normative_proposal == "Candidate Mandatory"
+
+
+def test_m365_application_consent_incomplete_concept_requires_review() -> None:
+    item = invented_control(
+        control_id="8.12",
+        title="Configure an invented consent safeguard",
+        description="Application consent and privileged permissions require admin consent.",
+        rationale="Administrator approval prevents an unreviewed permission grant.",
+        remediation="Require approval for application permission grants.",
+    )
+    assessment = assess_controls_shadow([item]).shadow_assessments[0]
+    assert assessment.normative_proposal == "Review Required"
+    assert "SHADOW-INCOMPLETE-BOUNDARY" in assessment.difference_codes
+
+
+def test_m365_application_and_workload_mapping_is_not_title_only() -> None:
+    item = invented_control(
+        title="Restrict application registration, admin consent, service principals, and workload identity",
+        description="An invented tenant preference is documented.",
+        rationale="The preference standardizes configuration.",
+        remediation="Configure the preference.",
+        audit="Verify all privileged application permissions are restricted.",
+        references="https://example.test/workload-identity",
+    )
+    assert Microsoft365Adapter().identify_boundary_candidates(item) == ()
+
+
+def test_m365_application_and_workload_shadow_slice_counts() -> None:
+    complete = [
+        invented_control(
+            control_id="10.1",
+            description="Application registration is restricted to an approved role.",
+            rationale="Accountable ownership prevents attacker-controlled application identities.",
+            remediation="Restrict application identity creation to an authorized role and require an owner.",
+        ),
+        invented_control(
+            control_id="10.2",
+            description="User consent is restricted and privileged application permissions require admin consent.",
+            rationale="Independent administrator approval prevents excessive permission grants.",
+            remediation="Block untrusted application consent, require approval, and constrain permission scope to least privilege.",
+        ),
+        invented_control(
+            control_id="10.3",
+            description="Each service principal is explicitly authorized with minimum permissions.",
+            rationale="A stale app-only permission permits excessive resource access.",
+            remediation="Enforce least privilege, approved role assignment, and review and revoke unused authorization.",
+        ),
+        invented_control(
+            control_id="10.4",
+            description="A federated workload identity validates its issuer, subject, and audience.",
+            rationale="Claim binding prevents a token from another workload context being accepted.",
+            remediation="Restrict and validate the issuer, subject, and audience of each federated identity credential.",
+        ),
+    ]
+    incomplete = invented_control(
+        control_id="10.5",
+        title="Configure consent for administrative users",
+        description="Application consent and privileged permissions require admin consent.",
+        rationale="Administrator approval prevents an unreviewed permission grant.",
+        remediation="Require approval for application permission grants.",
+    )
+    title_only = invented_control(
+        control_id="10.6",
+        title="Restrict application registration, consent, service principals, and workload identity",
+    )
+    proposals = [
+        item.normative_proposal
+        for item in assess_controls_shadow([*complete, incomplete, title_only]).shadow_assessments
+    ]
+    assert proposals.count("Candidate Mandatory") == 4
+    assert proposals.count("Review Required") == 1
+    assert proposals.count("Regular Control") == 1

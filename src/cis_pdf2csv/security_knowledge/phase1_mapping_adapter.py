@@ -4,6 +4,11 @@ from pydantic import BaseModel, Field
 
 from cis_pdf2csv.mandatory.schema import MandatoryAssessment
 from cis_pdf2csv.schema import ControlRecord
+from cis_pdf2csv.source_identity import (
+    SourceIdentity,
+    index_controls_by_source_identity,
+    source_identity_for_control,
+)
 
 from .boundaries import ApplicabilityMode
 from .evidence import EvidenceItem, EvidenceType
@@ -62,14 +67,18 @@ class CompatibilityResult(BaseModel):
     mappings: list[MitigationMapping] = Field(default_factory=list)
     findings: list[ValidationFinding] = Field(default_factory=list)
     proposal_by_control_id: dict[str, Proposal] = Field(default_factory=dict)
+    proposal_by_source_identity: dict[str, Proposal] = Field(default_factory=dict)
     adaptation_notes: list[str] = Field(default_factory=list)
 
 
 def _source_id(control: ControlRecord) -> str:
-    return (
-        f"CIS|{control.benchmark_name}|{control.benchmark_version}|"
-        f"{control.profile}|{control.control_id}"
-    )
+    return source_identity_for_control(control).serialize()
+
+
+def _assessment_identity(assessment: MandatoryAssessment) -> SourceIdentity:
+    if assessment.source_identity is None:
+        raise ValueError("MandatoryAssessment is missing composite source identity")
+    return assessment.source_identity
 
 
 def _boundary_id(assessment: MandatoryAssessment, capability_id: str) -> str | None:
@@ -84,16 +93,26 @@ def adapt_phase1_assessments_to_mappings(
     controls: list[ControlRecord],
     assessments: list[MandatoryAssessment],
 ) -> CompatibilityResult:
-    controls_by_id = {item.control_id: item for item in controls}
+    controls_by_identity = index_controls_by_source_identity(controls)
     mappings: list[MitigationMapping] = []
     findings: list[ValidationFinding] = []
     proposals: dict[str, Proposal] = {}
+    scoped_proposals: dict[str, Proposal] = {}
+    control_id_counts: dict[str, int] = {}
+    for assessment in assessments:
+        control_id_counts[assessment.control_id] = control_id_counts.get(assessment.control_id, 0) + 1
     sequence = 1000
 
-    for assessment in sorted(assessments, key=lambda item: item.control_id):
-        control = controls_by_id.get(assessment.control_id)
+    for assessment in sorted(
+        assessments,
+        key=lambda item: _assessment_identity(item).as_tuple(),
+    ):
+        identity = _assessment_identity(assessment)
+        control = controls_by_identity.get(identity)
         proposal = Proposal(assessment.proposal)
-        proposals[assessment.control_id] = proposal
+        scoped_proposals[identity.serialize()] = proposal
+        if control_id_counts[assessment.control_id] == 1:
+            proposals[assessment.control_id] = proposal
         if control is None:
             findings.append(
                 ValidationFinding(
@@ -106,7 +125,9 @@ def adapt_phase1_assessments_to_mappings(
                     decision_effect=DecisionEffect.REVIEW_REQUIRED,
                 )
             )
-            proposals[assessment.control_id] = Proposal.REVIEW
+            scoped_proposals[identity.serialize()] = Proposal.REVIEW
+            if control_id_counts[assessment.control_id] == 1:
+                proposals[assessment.control_id] = Proposal.REVIEW
             continue
 
         for legacy in assessment.attack_path_mappings:
@@ -123,7 +144,9 @@ def adapt_phase1_assessments_to_mappings(
                         decision_effect=DecisionEffect.REVIEW_REQUIRED,
                     )
                 )
-                proposals[assessment.control_id] = Proposal.REVIEW
+                scoped_proposals[identity.serialize()] = Proposal.REVIEW
+                if control_id_counts[assessment.control_id] == 1:
+                    proposals[assessment.control_id] = Proposal.REVIEW
                 continue
 
             evidence = [
@@ -185,12 +208,15 @@ def adapt_phase1_assessments_to_mappings(
                     decision_effect=DecisionEffect.REVIEW_REQUIRED,
                 )
             )
-            proposals[assessment.control_id] = Proposal.REVIEW
+            scoped_proposals[identity.serialize()] = Proposal.REVIEW
+            if control_id_counts[assessment.control_id] == 1:
+                proposals[assessment.control_id] = Proposal.REVIEW
 
     return CompatibilityResult(
         mappings=mappings,
         findings=sorted_findings(findings),
         proposal_by_control_id=proposals,
+        proposal_by_source_identity=scoped_proposals,
         adaptation_notes=[
             "Phase-1 narrative evidence is retained as typed source-control evidence.",
             "BoundaryDefinition IDs are explicit adapter mappings, not source facts.",

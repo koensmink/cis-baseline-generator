@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from cis_pdf2csv.schema import ControlRecord
+from cis_pdf2csv.source_identity import source_identity_for_control
 
 from .boundary_sets import BoundaryContext, applicability_mode
 from .comparison import ComparisonResult
@@ -156,6 +157,7 @@ def build_assessment(
     )
     return MandatoryAssessment(
         control_id=control.control_id,
+        source_identity=source_identity_for_control(control),
         proposal=proposal,
         control_family=family,
         mandatory_criteria=criteria,

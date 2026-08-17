@@ -18,6 +18,10 @@ from cis_pdf2csv.security_knowledge.catalog import SECURITY_KNOWLEDGE_CATALOG
 from cis_pdf2csv.security_knowledge.catalog.registry import SecurityKnowledgeCatalog
 from cis_pdf2csv.security_knowledge.catalog.validation import ValidationFinding
 from cis_pdf2csv.security_knowledge.compatibility import resolve_legacy_boundary_set
+from cis_pdf2csv.source_identity import (
+    SourceIdentity,
+    index_controls_by_source_identity,
+)
 
 from .pipeline import assess_controls
 from .schema import Confidence, MandatoryAssessment, Proposal
@@ -55,6 +59,7 @@ class NormativeMitigationMapping(BaseModel):
     model_config = ConfigDict(frozen=True)
     mapping_id: str
     control_id: str
+    source_identity: SourceIdentity
     capability_id: str
     boundary_definition_id: str
     boundary_set_definition_id: str
@@ -72,6 +77,11 @@ class ShadowBoundaryEvaluation(BaseModel):
     evaluation_id: str
     boundary_definition_id: str
     boundary_set_definition_id: str
+    source_framework: str
+    benchmark_family: str
+    benchmark_name: str
+    benchmark_version: str
+    profile: str
     evaluation_scope: str = "benchmark"
     selected_control_ids: tuple[str, ...]
     required_sub_boundaries: tuple[str, ...]
@@ -87,6 +97,7 @@ class ShadowBoundaryEvaluation(BaseModel):
 class ShadowMandatoryAssessment(BaseModel):
     model_config = ConfigDict(frozen=True)
     control_id: str
+    source_identity: SourceIdentity
     legacy_proposal: Proposal
     normative_proposal: Proposal
     proposals_match: bool
@@ -119,6 +130,23 @@ class ShadowAssessmentResult(BaseModel):
 def _stable_id(prefix: str, *parts: str) -> str:
     value = "\x1f".join(parts).encode()
     return f"{prefix}-{int(hashlib.sha256(value).hexdigest()[:15], 16):018d}"
+
+
+EvaluationKey = tuple[str, str, str, str, str, str, str]
+
+
+def _assessment_identity(assessment: MandatoryAssessment) -> SourceIdentity:
+    if assessment.source_identity is None:
+        raise ValueError("MandatoryAssessment is missing composite source identity")
+    return assessment.source_identity
+
+
+def _evaluation_key(
+    identity: SourceIdentity,
+    mapping_id: str,
+    evaluation_scope: str,
+) -> EvaluationKey:
+    return (*identity.benchmark_scope(), mapping_id, evaluation_scope)
 
 
 def _role(legacy: str) -> str:
@@ -214,20 +242,51 @@ def compare_shadow_assessments(
     catalog: SecurityKnowledgeCatalog = SECURITY_KNOWLEDGE_CATALOG,
 ) -> ShadowAssessmentResult:
     """Evaluate supplied legacy results without mutating or overriding them."""
-    controls = {item.control_id: item for item in records}
+    controls = index_controls_by_source_identity(records)
+    identities_by_control_id: dict[str, list[SourceIdentity]] = defaultdict(list)
+    for identity in controls:
+        identities_by_control_id[identity.control_id].append(identity)
+    scoped_legacy: list[MandatoryAssessment] = []
+    for assessment in legacy_assessments:
+        if assessment.source_identity is not None:
+            scoped_legacy.append(assessment)
+            continue
+        matches = identities_by_control_id.get(assessment.control_id, [])
+        if len(matches) != 1:
+            raise ValueError(
+                "Legacy MandatoryAssessment lacks composite source identity and "
+                f"control_id '{assessment.control_id}' is not uniquely resolvable"
+            )
+        scoped_legacy.append(
+            assessment.model_copy(update={"source_identity": matches[0]})
+        )
+    legacy_assessments = scoped_legacy
     catalog_blockers = _catalog_findings(catalog.validate())
-    grouped: dict[tuple[str, str], list[tuple[MandatoryAssessment, BoundaryCandidate | None]]] = defaultdict(list)
+    grouped: dict[
+        EvaluationKey,
+        list[tuple[MandatoryAssessment, BoundaryCandidate | None]],
+    ] = defaultdict(list)
     for item in legacy_assessments:
-        candidates = _semantic_candidates(controls[item.control_id])
+        identity = _assessment_identity(item)
+        candidates = _semantic_candidates(controls[identity])
         if candidates:
             for candidate in candidates:
-                grouped[(candidate.semantic_mapping_id, candidate.evaluation_scope)].append((item, candidate))
+                key = _evaluation_key(
+                    identity,
+                    candidate.semantic_mapping_id,
+                    candidate.evaluation_scope,
+                )
+                grouped[key].append((item, candidate))
         elif item.boundary_set_id:
-            grouped[(item.boundary_set_id, "benchmark")].append((item, None))
+            grouped[_evaluation_key(identity, item.boundary_set_id, "benchmark")].append(
+                (item, None)
+            )
 
-    evaluations: dict[tuple[str, str], ShadowBoundaryEvaluation] = {}
-    mappings_by_control: dict[str, list[NormativeMitigationMapping]] = defaultdict(list)
-    for (legacy_id, evaluation_scope), entries in sorted(grouped.items()):
+    evaluations: dict[EvaluationKey, ShadowBoundaryEvaluation] = {}
+    mappings_by_control: dict[SourceIdentity, list[NormativeMitigationMapping]] = defaultdict(list)
+    for key, entries in sorted(grouped.items()):
+        legacy_id, evaluation_scope = key[-2:]
+        source_framework, family, benchmark_name, benchmark_version, profile = key[:5]
         members = [item for item, _ in entries]
         migration = resolve_legacy_boundary_set(legacy_id, catalog)
         if migration is None:
@@ -236,11 +295,13 @@ def compare_shadow_assessments(
         selected = tuple(sorted(item.control_id for item in members))
         semantic = legacy_id.startswith("SEM-")
         semantic_candidates = {
-            item.control_id: candidate for item, candidate in entries if candidate is not None
+            _assessment_identity(item): candidate
+            for item, candidate in entries
+            if candidate is not None
         }
         roles = {
-            semantic_candidates[item.control_id].boundary_role
-            if item.control_id in semantic_candidates
+            semantic_candidates[_assessment_identity(item)].boundary_role
+            if _assessment_identity(item) in semantic_candidates
             else _role(item.relationship)
             for item in members
         }
@@ -288,11 +349,18 @@ def compare_shadow_assessments(
             if roles <= {"supporting_hardening", "risk_adaptive_enhancement", "fine_tuning", "detection_only", "information_hiding", "operational"}
             else CompletenessStatus.INCOMPLETE_BOUNDARY
         )
-        evaluation_id = _stable_id("BEV-SHADOW", legacy_id, evaluation_scope, *selected)
-        evaluations[(legacy_id, evaluation_scope)] = ShadowBoundaryEvaluation(
+        evaluation_id = _stable_id(
+            "BEV-SHADOW", *key, *selected
+        )
+        evaluations[key] = ShadowBoundaryEvaluation(
             evaluation_id=evaluation_id,
             boundary_definition_id=migration.normative_boundary_definition_id,
             boundary_set_definition_id=migration.normative_boundary_set_id,
+            source_framework=source_framework,
+            benchmark_family=family,
+            benchmark_name=benchmark_name,
+            benchmark_version=benchmark_version,
+            profile=profile,
             evaluation_scope=evaluation_scope,
             selected_control_ids=selected,
             required_sub_boundaries=required,
@@ -312,8 +380,11 @@ def compare_shadow_assessments(
                 )
             ),
         )
-        for assessment in sorted(members, key=lambda item: item.control_id):
-            mapping_candidate = semantic_candidates.get(assessment.control_id)
+        for assessment in sorted(
+            members, key=lambda item: _assessment_identity(item).as_tuple()
+        ):
+            identity = _assessment_identity(assessment)
+            mapping_candidate = semantic_candidates.get(identity)
             role = (
                 mapping_candidate.boundary_role
                 if mapping_candidate
@@ -335,12 +406,13 @@ def compare_shadow_assessments(
                     for scenario_id in path.threat_scenario_ids:
                         for effect in effects:
                             mapping_id = _stable_id(
-                                "MAP", assessment.control_id, capability_id, path_id, scenario_id, effect
+                                "MAP", identity.serialize(), capability_id, path_id, scenario_id, effect
                             )
-                            mappings_by_control[assessment.control_id].append(
+                            mappings_by_control[identity].append(
                                 NormativeMitigationMapping(
                                     mapping_id=mapping_id,
                                     control_id=assessment.control_id,
+                                    source_identity=identity,
                                     capability_id=capability_id,
                                     boundary_definition_id=migration.normative_boundary_definition_id,
                                     boundary_set_definition_id=migration.normative_boundary_set_id,
@@ -363,9 +435,9 @@ def compare_shadow_assessments(
             CompletenessStatus.COMPLETE_COMPLEMENTARY_CORE_SET,
         }
     }
-    paths_by_key: dict[tuple[str, str], frozenset[str]] = {}
+    paths_by_key: dict[EvaluationKey, frozenset[str]] = {}
     for key, entries in grouped.items():
-        migration = resolve_legacy_boundary_set(key[0], catalog)
+        migration = resolve_legacy_boundary_set(key[-2], catalog)
         if migration is None:
             continue
         paths_by_key[key] = frozenset(
@@ -378,38 +450,47 @@ def compare_shadow_assessments(
             )
         )
     dominant_keys = {
-        key for key in complete_keys if key[1] == "tenant:all_resources|all_users"
+        key for key in complete_keys if key[-1] == "tenant:all_resources|all_users"
     }
     dominated_keys = {
         key for key in complete_keys
-        if key[1] != "tenant:all_resources|all_users"
+        if key[-1] != "tenant:all_resources|all_users"
         and any(
-            dominant[0] == key[0]
+            dominant[:6] == key[:6]
             and paths_by_key.get(key, frozenset()) <= paths_by_key.get(dominant, frozenset())
             for dominant in dominant_keys
         )
     }
 
     shadows: list[ShadowMandatoryAssessment] = []
-    for legacy in sorted(legacy_assessments, key=lambda item: item.control_id):
-        candidates = _semantic_candidates(controls[legacy.control_id])
+    for legacy in sorted(
+        legacy_assessments, key=lambda item: _assessment_identity(item).as_tuple()
+    ):
+        identity = _assessment_identity(legacy)
+        control = controls[identity]
+        candidates = _semantic_candidates(control)
         boundary_keys = (
-            tuple((item.semantic_mapping_id, item.evaluation_scope) for item in candidates)
+            tuple(
+                _evaluation_key(identity, item.semantic_mapping_id, item.evaluation_scope)
+                for item in candidates
+            )
             if candidates
-            else ((legacy.boundary_set_id, "benchmark"),) if legacy.boundary_set_id else ()
+            else (_evaluation_key(identity, legacy.boundary_set_id, "benchmark"),)
+            if legacy.boundary_set_id
+            else ()
         )
         migrations = {
             key: migration
             for key in boundary_keys
-            if (migration := resolve_legacy_boundary_set(key[0], catalog)) is not None
+            if (migration := resolve_legacy_boundary_set(key[-2], catalog)) is not None
         }
         control_evaluation_pairs = tuple(
             (key, evaluations[key]) for key in boundary_keys if key in evaluations
         )
         control_evaluations = tuple(item for _, item in control_evaluation_pairs)
-        mappings = tuple(sorted(mappings_by_control[legacy.control_id], key=lambda item: item.mapping_id))
+        mappings = tuple(sorted(mappings_by_control[identity], key=lambda item: item.mapping_id))
         findings: list[ShadowValidationFinding] = list(catalog_blockers)
-        adapter_selection = select_adapter(controls[legacy.control_id])
+        adapter_selection = select_adapter(control)
         if adapter_selection.finding:
             findings.append(
                 ShadowValidationFinding(
@@ -447,7 +528,7 @@ def compare_shadow_assessments(
             )
             findings.append(ShadowValidationFinding(code="BOUNDARY_EVALUATION_INCOMPLETE", severity="warning", message=f"Missing effects: {', '.join(missing_effects)}", review_required=True))
         semantic_applicability = (
-            _semantic_applicability(controls[legacy.control_id])
+            _semantic_applicability(control)
             if candidates
             else None
         )
@@ -511,7 +592,7 @@ def compare_shadow_assessments(
             codes.add("SHADOW-BOUNDARY-DIFFERENCE")
         ordered_codes = tuple(sorted(codes))
         mapping_refs_resolve = bool(mappings) and all(
-            item.control_id in controls and item.confidence == "High" for item in mappings
+            item.source_identity in controls and item.confidence == "High" for item in mappings
         )
         cutover = bool(
             normative == legacy.proposal
@@ -523,6 +604,7 @@ def compare_shadow_assessments(
         shadows.append(
             ShadowMandatoryAssessment(
                 control_id=legacy.control_id,
+                source_identity=identity,
                 legacy_proposal=legacy.proposal,
                 normative_proposal=normative,
                 proposals_match=normative == legacy.proposal,

@@ -1,35 +1,46 @@
 from __future__ import annotations
 
-from typing import List, Optional
-
 from pydantic import BaseModel, Field
+
+from cis_pdf2csv.source_identity import SourceIdentity
 
 from .value_parser import ParsedRecommendation
 
 
 class MappingInputControl(BaseModel):
+    source_framework: str = "cis"
+    benchmark_family: str = "unknown"
+    benchmark_name: str = ""
+    benchmark_version: str = ""
     control_id: str
     title: str
     profile: str = "Unknown"
     assessment: str = "Unknown"
+    applicability: str | None = None
 
-    recommendation: Optional[str] = None
-    description: Optional[str] = None
-    rationale: Optional[str] = None
-    impact: Optional[str] = None
-    audit: Optional[str] = None
-    remediation: Optional[str] = None
-    default_value: Optional[str] = None
-    references: Optional[str] = None
+    recommendation: str | None = None
+    description: str | None = None
+    rationale: str | None = None
+    impact: str | None = None
+    audit: str | None = None
+    remediation: str | None = None
+    default_value: str | None = None
+    references: str | None = None
 
 
 class NormalizedControl(MappingInputControl):
-    target: str = "windows_server_2025"
+    source_identity: SourceIdentity
+    target: str | None = None
     parsed_recommendation: ParsedRecommendation
-    quality_flags: List[str] = Field(default_factory=list)
+    quality_flags: list[str] = Field(default_factory=list)
 
 
 class IntuneMapping(BaseModel):
+    source_framework: str = "cis"
+    benchmark_family: str = "unknown"
+    benchmark_name: str = ""
+    benchmark_version: str = ""
+    profile: str = "Unknown"
     cis_id: str
     title: str
     implementation_type: str
@@ -39,9 +50,10 @@ class IntuneMapping(BaseModel):
     confidence: float
 
     rule_id: str
-    notes: Optional[str] = None
-    parsed_value_type: Optional[str] = None
-    quality_flags: List[str] = Field(default_factory=list)
+    reason_code: str | None = None
+    notes: str | None = None
+    parsed_value_type: str | None = None
+    quality_flags: list[str] = Field(default_factory=list)
 
 
 class MappingConflict(BaseModel):
@@ -49,8 +61,8 @@ class MappingConflict(BaseModel):
     title: str
     selected_rule_id: str
     selected_implementation_type: str
-    matched_rule_ids: List[str]
-    matched_implementation_types: List[str]
+    matched_rule_ids: list[str]
+    matched_implementation_types: list[str]
 
 
 class SuggestedMapping(BaseModel):
@@ -65,6 +77,6 @@ class SuggestedMapping(BaseModel):
 
 
 class ResolverResult(BaseModel):
-    mappings: List[IntuneMapping]
-    conflicts: List[MappingConflict]
-    suggestions: List[SuggestedMapping] = Field(default_factory=list)
+    mappings: list[IntuneMapping]
+    conflicts: list[MappingConflict]
+    suggestions: list[SuggestedMapping] = Field(default_factory=list)

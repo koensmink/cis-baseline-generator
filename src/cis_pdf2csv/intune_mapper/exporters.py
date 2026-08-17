@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import csv
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from .models import IntuneMapping, MappingConflict, SuggestedMapping
 
@@ -22,6 +23,11 @@ def _to_dict(row: Any) -> dict:
 def write_baseline_csv(mappings: Iterable[IntuneMapping], out_path: Path) -> None:
     rows = list(mappings)
     fieldnames = [
+        "source_framework",
+        "benchmark_family",
+        "benchmark_name",
+        "benchmark_version",
+        "profile",
         "cis_id",
         "title",
         "implementation_type",
@@ -30,6 +36,7 @@ def write_baseline_csv(mappings: Iterable[IntuneMapping], out_path: Path) -> Non
         "value",
         "confidence",
         "rule_id",
+        "reason_code",
         "parsed_value_type",
         "quality_flags",
         "notes",
@@ -82,6 +89,11 @@ def write_intune_policies_json(mappings: Iterable[IntuneMapping], out_path: Path
         area = mapping.intune_area
         grouped.setdefault(area, []).append(
             {
+                "source_framework": mapping.source_framework,
+                "benchmark_family": mapping.benchmark_family,
+                "benchmark_name": mapping.benchmark_name,
+                "benchmark_version": mapping.benchmark_version,
+                "profile": mapping.profile,
                 "cis_id": mapping.cis_id,
                 "title": mapping.title,
                 "implementation_type": mapping.implementation_type,
@@ -89,6 +101,7 @@ def write_intune_policies_json(mappings: Iterable[IntuneMapping], out_path: Path
                 "value": mapping.value,
                 "confidence": mapping.confidence,
                 "rule_id": mapping.rule_id,
+                "reason_code": mapping.reason_code,
                 "parsed_value_type": mapping.parsed_value_type,
                 "quality_flags": mapping.quality_flags,
             }

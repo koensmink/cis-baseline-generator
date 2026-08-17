@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from cis_pdf2csv.schema import ControlRecord
 from cis_pdf2csv.security_knowledge.adapters import BenchmarkFamily, select_adapter
+from cis_pdf2csv.source_identity import source_identity_for_control
 
 from .schema import ApplicabilityMode, OverlapType
 
@@ -195,17 +196,19 @@ def identify_boundary_membership(control: ControlRecord) -> BoundaryMembership |
 
 def analyze_boundary_sets(controls: list[ControlRecord]) -> list[BoundaryContext]:
     memberships = [identify_boundary_membership(control) for control in controls]
-    grouped: dict[str, list[int]] = {}
+    grouped: dict[tuple[tuple[str, str, str, str, str], str], list[int]] = {}
     for index, membership in enumerate(memberships):
         if membership:
-            grouped.setdefault(membership.definition.boundary_set_id, []).append(index)
+            scope = source_identity_for_control(controls[index]).benchmark_scope()
+            grouped.setdefault((scope, membership.definition.boundary_set_id), []).append(index)
 
     contexts: list[BoundaryContext] = []
     for index, membership in enumerate(memberships):
         if not membership:
             contexts.append(BoundaryContext(None))
             continue
-        member_indices = grouped[membership.definition.boundary_set_id]
+        scope = source_identity_for_control(controls[index]).benchmark_scope()
+        member_indices = grouped[(scope, membership.definition.boundary_set_id)]
         group_members = [
             (member_index, item)
             for member_index in member_indices

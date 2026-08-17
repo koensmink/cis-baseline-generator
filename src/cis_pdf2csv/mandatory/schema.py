@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from cis_pdf2csv.security_knowledge.schema import ControlAttackPathMapping
+from cis_pdf2csv.source_identity import SourceIdentity
 
 Proposal = Literal["Regular Control", "Review Required", "Candidate Mandatory"]
 Confidence = Literal["Low", "Medium", "High"]
@@ -30,6 +31,7 @@ class BenchmarkEvidence(BaseModel):
 
 class MandatoryAssessment(BaseModel):
     control_id: str
+    source_identity: SourceIdentity | None = None
     proposal: Proposal
     control_family: str
     mandatory_criteria: list[str] = Field(default_factory=list)

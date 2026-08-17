@@ -88,6 +88,8 @@ class Microsoft365Adapter(BenchmarkFamilyAdapter):
     def identify_boundary_candidates(self, control: ControlRecord) -> tuple[BoundaryCandidate, ...]:
         title = control.title.lower()
         behavior = _behavior(control)
+        scope = _evaluation_scope(control)
+        risk_adaptive = "risk" in title and "risk" in behavior
         rules: tuple[tuple[str, str, str, tuple[str, ...], str, bool], ...] = (
             (
                 "SEM-WEAK-PLAINTEXT-AUTHENTICATION",
@@ -147,7 +149,7 @@ class Microsoft365Adapter(BenchmarkFamilyAdapter):
                     "authentication bypass resistance",
                 ),
                 "standalone_primary_boundary",
-                _mfa_enforcement(behavior),
+                _mfa_enforcement(behavior) and not risk_adaptive,
             ),
             (
                 "SEM-PHISHING-RESISTANT-AUTHENTICATION",
@@ -174,12 +176,20 @@ class Microsoft365Adapter(BenchmarkFamilyAdapter):
                 _authentication_strength_enforcement(behavior),
             ),
             (
+                "SEM-AUTHENTICATION-STRENGTH",
+                "authentication",
+                "selected weak authentication methods disabled",
+                ("weaker authentication methods rejected",),
+                "supporting_hardening",
+                _weak_method_hardening(behavior),
+            ),
+            (
                 "SEM-SESSION-ASSURANCE",
                 "authentication",
                 "authentication freshness and protected continuation enforced",
                 _session_assurance_effects(behavior),
                 "boundary_set_core_member",
-                _session_assurance(behavior),
+                _session_assurance(behavior) and not risk_adaptive,
             ),
             (
                 "SEM-AUTHENTICATION-SESSION-BINDING",
@@ -210,6 +220,37 @@ class Microsoft365Adapter(BenchmarkFamilyAdapter):
                         satisfied_sub_boundaries=sub_boundaries,
                         boundary_role=role,
                         non_compensable=True,
+                        evaluation_scope=scope,
+                        attack_path_ids=_candidate_attack_paths(mapping, behavior),
+                    )
+                )
+        if risk_adaptive:
+            if _mfa_enforcement(behavior):
+                candidates.append(
+                    BoundaryCandidate(
+                        semantic_mapping_id="SEM-MULTIFACTOR-AUTHENTICATION",
+                        semantic_domain="authentication",
+                        security_effect="risk-triggered multifactor challenge",
+                        evidence=("domain:authentication", "effect:risk-triggered multifactor challenge"),
+                        satisfied_sub_boundaries=("additional independent authentication factor",),
+                        boundary_role="risk_adaptive_enhancement",
+                        non_compensable=False,
+                        evaluation_scope=scope,
+                        attack_path_ids=("AP-017",),
+                    )
+                )
+            if _session_assurance(behavior):
+                candidates.append(
+                    BoundaryCandidate(
+                        semantic_mapping_id="SEM-SESSION-ASSURANCE",
+                        semantic_domain="authentication",
+                        security_effect="risk-triggered revalidation",
+                        evidence=("domain:authentication", "effect:risk-triggered revalidation"),
+                        satisfied_sub_boundaries=("risk or event driven revalidation",),
+                        boundary_role="risk_adaptive_enhancement",
+                        non_compensable=False,
+                        evaluation_scope=scope,
+                        attack_path_ids=("AP-020",),
                     )
                 )
         return tuple(candidates)
@@ -273,15 +314,18 @@ def _phishing_resistant_enforcement(text: str) -> bool:
 
 def _authentication_strength_enforcement(text: str) -> bool:
     explicit_strength = _contains_all(text, (("authentication strength",), ("require", "requires", "required", "enforce", "enforces", "enforced"), ("block", "reject", "allowed methods", "stronger method")))
-    weak_method_rejection = _contains_all(
+    return explicit_strength
+
+
+def _weak_method_hardening(text: str) -> bool:
+    return _contains_all(
         text,
         (
-            ("weak authentication methods", "weaker methods", "authentication methods"),
-            ("disable", "disabled", "block", "reject"),
-            ("more secure", "stronger method", "phishing", "replay"),
+            ("weak authentication methods", "sms", "voice call"),
+            ("disable", "disabled"),
+            ("phishing", "sim swapping", "intercepted"),
         ),
     )
-    return explicit_strength or weak_method_rejection
 
 
 def _session_assurance(text: str) -> bool:
@@ -290,7 +334,7 @@ def _session_assurance(text: str) -> bool:
 
 def _session_assurance_effects(text: str) -> tuple[str, ...]:
     effects = ["reauthentication freshness"]
-    if any(term in text for term in ("persistent browser", "session continuation", "stolen token")):
+    if any(term in text for term in ("persistent browser", "session continuation", "never persistent")):
         effects.append("protected session continuation")
     if any(term in text for term in ("risk change", "sign-in risk", "user risk", "context change")):
         effects.append("risk or event driven revalidation")
@@ -328,3 +372,37 @@ def _requires_managed_device(text: str) -> bool:
         term in text
         for term in ("enrolled", "enrollment", "compliance polic", "hybrid joined", "device management")
     )
+
+
+def _evaluation_scope(control: ControlRecord) -> str:
+    text = _all_behavior(control)
+    if "intune enrollment" in text:
+        resource = "application:intune_enrollment"
+    elif "all resources" in text or "all cloud apps" in text:
+        resource = "tenant:all_resources"
+    elif "exchange online" in text:
+        resource = "service:exchange_online"
+    elif "sharepoint" in text:
+        resource = "service:sharepoint"
+    elif "streaming and push datasets" in text or "resourcekey" in text:
+        resource = "feature:power_bi_streaming_push"
+    else:
+        resource = "benchmark"
+    title = control.title.lower()
+    if "administrative roles" in title or "administrative users" in title:
+        subject = "administrative_roles"
+    elif "user risk" in title:
+        subject = "high_user_risk"
+    elif "sign-in risk" in title:
+        subject = "medium_high_sign_in_risk"
+    elif "all users" in title or "all users" in text:
+        subject = "all_users"
+    else:
+        subject = "stated_subjects"
+    return f"{resource}|{subject}"
+
+
+def _candidate_attack_paths(mapping_id: str, behavior: str) -> tuple[str, ...]:
+    if mapping_id == "SEM-WEAK-PLAINTEXT-AUTHENTICATION" and "resourcekey" in behavior:
+        return ("AP-022",)
+    return ()

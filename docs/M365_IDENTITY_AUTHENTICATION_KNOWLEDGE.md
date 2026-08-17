@@ -9,7 +9,7 @@ This extension covers multifactor authentication, phishing-resistant authenticat
 - `BND-IDENTITY-MULTIFACTOR-AUTHENTICATION` requires an additional independent factor, an enforced access scope, and bypass resistance.
 - `BND-IDENTITY-PHISHING-RESISTANT-AUTHENTICATION` requires cryptographic verifier binding, origin or channel binding, and replay/proxy resistance.
 - `BND-IDENTITY-AUTHENTICATION-STRENGTH` requires a selected minimum strength, an enforced scope, and rejection of weaker methods.
-- `BND-IDENTITY-SESSION-ASSURANCE` requires reauthentication freshness, protected session continuation, and risk- or event-driven revalidation.
+- `BND-IDENTITY-SESSION-ASSURANCE` requires reauthentication freshness and protected session continuation. Risk- or event-driven revalidation is an enhancement, not a universal prerequisite.
 - `BND-IDENTITY-AUTHENTICATION-SESSION-BINDING` requires transfer prohibition, binding to the originating context, and token-replay resistance.
 - `BND-IDENTITY-MANAGED-DEVICE-TRUST` requires trusted device identity, a device-state assertion, and enforcement at authentication.
 

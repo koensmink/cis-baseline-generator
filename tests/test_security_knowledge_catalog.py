@@ -42,7 +42,7 @@ def test_authoritative_catalog_builds_with_zero_errors() -> None:
     catalog = build_catalog()
     assert catalog.validate() == ()
     assert (len(catalog.capabilities), len(catalog.boundary_definitions), len(catalog.boundary_set_definitions)) == (10, 23, 19)
-    assert (len(catalog.threat_scenarios), len(catalog.attack_techniques), len(catalog.attack_paths), len(catalog.security_outcomes)) == (28, 17, 21, 14)
+    assert (len(catalog.threat_scenarios), len(catalog.attack_techniques), len(catalog.attack_paths), len(catalog.security_outcomes)) == (28, 17, 22, 14)
 
 
 def test_identity_authentication_catalog_objects_are_reusable_and_complete() -> None:

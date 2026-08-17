@@ -25,6 +25,7 @@ _PATHS = (
     ("AP-019", "Session replay and authentication transfer", ("TS-126",), ("TEC-016",), ("OUT-002", "OUT-009", "OUT-012"), ("BND-IDENTITY-AUTHENTICATION-SESSION-BINDING",)),
     ("AP-020", "Stale authenticated-session abuse", ("TS-127",), ("TEC-016",), ("OUT-002", "OUT-009", "OUT-012"), ("BND-IDENTITY-SESSION-ASSURANCE",)),
     ("AP-021", "Untrusted-device authentication access", ("TS-128",), ("TEC-017",), ("OUT-002", "OUT-009", "OUT-012"), ("BND-IDENTITY-MANAGED-DEVICE-TRUST",)),
+    ("AP-022", "Non-user resource-key authentication bypass", ("TS-121",), ("TEC-011",), ("OUT-002", "OUT-009", "OUT-012"), ("BND-IDENTITY-WEAK-AUTHENTICATION",)),
 )
 
 ATTACK_PATHS = tuple(

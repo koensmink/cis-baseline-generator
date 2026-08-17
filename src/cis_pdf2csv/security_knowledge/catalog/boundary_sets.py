@@ -20,7 +20,7 @@ _SETS = (
     ("BS-IDENTITY-MULTIFACTOR-AUTHENTICATION", "BND-IDENTITY-MULTIFACTOR-AUTHENTICATION", "Multifactor authentication enforcement", ("additional independent authentication factor", "authentication enforcement scope", "authentication bypass resistance")),
     ("BS-IDENTITY-PHISHING-RESISTANT-AUTHENTICATION", "BND-IDENTITY-PHISHING-RESISTANT-AUTHENTICATION", "Phishing-resistant authentication", ("cryptographic verifier binding", "origin or channel binding", "credential replay and proxy resistance")),
     ("BS-IDENTITY-AUTHENTICATION-STRENGTH", "BND-IDENTITY-AUTHENTICATION-STRENGTH", "Authentication-strength enforcement", ("minimum authentication strength selected", "authentication enforcement scope", "weaker authentication methods rejected")),
-    ("BS-IDENTITY-SESSION-ASSURANCE", "BND-IDENTITY-SESSION-ASSURANCE", "Session assurance and authentication freshness", ("reauthentication freshness", "protected session continuation", "risk or event driven revalidation")),
+    ("BS-IDENTITY-SESSION-ASSURANCE", "BND-IDENTITY-SESSION-ASSURANCE", "Session assurance and authentication freshness", ("reauthentication freshness", "protected session continuation")),
     ("BS-IDENTITY-AUTHENTICATION-SESSION-BINDING", "BND-IDENTITY-AUTHENTICATION-SESSION-BINDING", "Authentication transfer and session binding", ("authentication transfer prohibited", "authenticated state bound to originating context", "session token replay resistance")),
     ("BS-IDENTITY-MANAGED-DEVICE-TRUST", "BND-IDENTITY-MANAGED-DEVICE-TRUST", "Managed-device authentication trust", ("trusted device identity", "device state assertion", "device trust policy enforced at authentication")),
 )

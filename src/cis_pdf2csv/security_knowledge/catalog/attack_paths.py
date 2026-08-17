@@ -20,6 +20,11 @@ _PATHS = (
     ("AP-014", "Password guessing and weak-secret authentication", ("TS-119",), ("TEC-013",), ("OUT-002", "OUT-012"), ("BND-IDENTITY-PASSWORD-AUTHENTICATION",)),
     ("AP-015", "Authentication through unapproved external identity trust", ("TS-120",), ("TEC-005",), ("OUT-002", "OUT-004"), ("BND-IDENTITY-EXTERNAL-AUTHENTICATION",)),
     ("AP-016", "Privilege escalation through unapproved role activation", ("TS-122",), ("TEC-007",), ("OUT-004", "OUT-012"), ("BND-IDENTITY-PRIVILEGED-ACTIVATION",)),
+    ("AP-017", "Password-only authentication compromise", ("TS-123", "TS-124"), ("TEC-014", "TEC-015"), ("OUT-002", "OUT-003", "OUT-012"), ("BND-IDENTITY-MULTIFACTOR-AUTHENTICATION",)),
+    ("AP-018", "Phishing-resistant authentication bypass", ("TS-124", "TS-125"), ("TEC-014", "TEC-015", "TEC-016"), ("OUT-002", "OUT-003", "OUT-012"), ("BND-IDENTITY-PHISHING-RESISTANT-AUTHENTICATION", "BND-IDENTITY-AUTHENTICATION-STRENGTH")),
+    ("AP-019", "Session replay and authentication transfer", ("TS-126",), ("TEC-016",), ("OUT-002", "OUT-009", "OUT-012"), ("BND-IDENTITY-AUTHENTICATION-SESSION-BINDING",)),
+    ("AP-020", "Stale authenticated-session abuse", ("TS-127",), ("TEC-016",), ("OUT-002", "OUT-009", "OUT-012"), ("BND-IDENTITY-SESSION-ASSURANCE",)),
+    ("AP-021", "Untrusted-device authentication access", ("TS-128",), ("TEC-017",), ("OUT-002", "OUT-009", "OUT-012"), ("BND-IDENTITY-MANAGED-DEVICE-TRUST",)),
 )
 
 ATTACK_PATHS = tuple(

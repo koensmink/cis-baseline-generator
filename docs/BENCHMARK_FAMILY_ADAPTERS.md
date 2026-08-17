@@ -49,6 +49,21 @@ mail security, auditing, data protection, service-principal authorization, and
 meeting or cross-tenant collaboration. Domain recognition only narrows
 possible catalog concepts; it never creates a Candidate Mandatory result.
 
+Within authentication, the adapter deterministically recognizes enforced MFA,
+phishing-resistant authentication, authentication-strength policy, session
+freshness and revalidation, authentication-transfer/session binding, and
+managed-device trust. Recognition requires corroborating behavior in
+description, rationale, remediation, or applicability; titles, audit text, and
+references cannot activate a mapping. A recommendation may mention an
+authentication product term without proving every required boundary effect.
+
+Device-aware authentication is deployment-sensitive. E3 or E5 establishes
+entitlement only. Enrollment, compliance-policy operation, hybrid identity, and
+the authentication-policy dependency remain conditional deployment facts, so a
+managed-device mapping is Review Required until benchmark-scope deployment is
+resolved. Tenant-wide access policy, feature-specific policy, service-specific
+policy, and conditional deployment remain distinct normalized scopes.
+
 ## Windows isolation
 
 Windows Server keeps its SMB, LDAP, NTLM, WinRM, RDP, Windows Firewall,

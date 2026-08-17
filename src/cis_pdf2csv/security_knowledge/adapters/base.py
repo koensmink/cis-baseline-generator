@@ -52,6 +52,9 @@ class BoundaryCandidate(BaseModel):
     semantic_domain: str
     security_effect: str
     evidence: tuple[str, ...]
+    satisfied_sub_boundaries: tuple[str, ...] = ()
+    boundary_role: str = "boundary_set_core_member"
+    non_compensable: bool = False
 
 
 class BenchmarkFamilyAdapter(ABC):

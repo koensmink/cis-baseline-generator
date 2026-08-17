@@ -17,6 +17,10 @@ _TECHNIQUES = (
     ("TEC-011", "Plaintext credential interception", "Observe credentials transmitted without adequate protection.", "credential access", "T1557"),
     ("TEC-012", "Data access through missing encryption", "Read data exposed because cryptographic storage protection is absent.", "collection", None),
     ("TEC-013", "Password guessing", "Attempt candidate passwords until an account accepts one.", "credential access", "T1110"),
+    ("TEC-014", "Credential phishing", "Induce a user to disclose or exercise authentication material through a deceptive verifier.", "credential access", None),
+    ("TEC-015", "Multifactor authentication bypass", "Defeat or abuse an additional authentication factor through fatigue, interception, or weak factor choice.", "authentication", None),
+    ("TEC-016", "Session token replay", "Reuse authenticated session material outside its intended context.", "credential access", None),
+    ("TEC-017", "Device trust bypass", "Present missing, false, or transferred device trust context to an authentication decision.", "defense evasion", None),
 )
 
 TECHNIQUES = tuple(

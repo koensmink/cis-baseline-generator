@@ -41,8 +41,31 @@ def finding_codes(catalog: SecurityKnowledgeCatalog) -> set[str]:
 def test_authoritative_catalog_builds_with_zero_errors() -> None:
     catalog = build_catalog()
     assert catalog.validate() == ()
-    assert (len(catalog.capabilities), len(catalog.boundary_definitions), len(catalog.boundary_set_definitions)) == (10, 17, 13)
-    assert (len(catalog.threat_scenarios), len(catalog.attack_techniques), len(catalog.attack_paths), len(catalog.security_outcomes)) == (22, 13, 16, 14)
+    assert (len(catalog.capabilities), len(catalog.boundary_definitions), len(catalog.boundary_set_definitions)) == (10, 23, 19)
+    assert (len(catalog.threat_scenarios), len(catalog.attack_techniques), len(catalog.attack_paths), len(catalog.security_outcomes)) == (28, 17, 21, 14)
+
+
+def test_identity_authentication_catalog_objects_are_reusable_and_complete() -> None:
+    catalog = SECURITY_KNOWLEDGE_CATALOG
+    identity_boundaries = {
+        "BND-IDENTITY-MULTIFACTOR-AUTHENTICATION",
+        "BND-IDENTITY-PHISHING-RESISTANT-AUTHENTICATION",
+        "BND-IDENTITY-AUTHENTICATION-STRENGTH",
+        "BND-IDENTITY-SESSION-ASSURANCE",
+        "BND-IDENTITY-AUTHENTICATION-SESSION-BINDING",
+        "BND-IDENTITY-MANAGED-DEVICE-TRUST",
+    }
+    assert identity_boundaries <= {item.boundary_id for item in catalog.boundary_definitions}
+    for boundary_id in identity_boundaries:
+        boundary = catalog.get_boundary(boundary_id)
+        matching_sets = [
+            item for item in catalog.boundary_set_definitions
+            if item.boundary_definition_id == boundary_id
+        ]
+        assert boundary.related_capability_ids
+        assert boundary.known_exclusions
+        assert len(matching_sets) == 1
+        assert set(matching_sets[0].required_sub_boundaries) == set(boundary.required_security_effects)
 
 
 def test_catalog_serialization_is_deterministic_and_round_trips() -> None:

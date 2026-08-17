@@ -17,6 +17,12 @@ _SETS = (
     ("BS-IDENTITY-EXTERNAL-AUTHENTICATION", "BND-IDENTITY-EXTERNAL-AUTHENTICATION", "External identity authentication", ("unapproved external identity trust rejected", "accepted identity authorities authenticated")),
     ("BS-IDENTITY-WEAK-AUTHENTICATION", "BND-IDENTITY-WEAK-AUTHENTICATION", "Weak and plaintext authentication", ("Basic or plaintext authentication rejected",)),
     ("BS-IDENTITY-PRIVILEGED-ACTIVATION", "BND-IDENTITY-PRIVILEGED-ACTIVATION", "Privileged role activation", ("activation independently approved", "activation scope and duration constrained")),
+    ("BS-IDENTITY-MULTIFACTOR-AUTHENTICATION", "BND-IDENTITY-MULTIFACTOR-AUTHENTICATION", "Multifactor authentication enforcement", ("additional independent authentication factor", "authentication enforcement scope", "authentication bypass resistance")),
+    ("BS-IDENTITY-PHISHING-RESISTANT-AUTHENTICATION", "BND-IDENTITY-PHISHING-RESISTANT-AUTHENTICATION", "Phishing-resistant authentication", ("cryptographic verifier binding", "origin or channel binding", "credential replay and proxy resistance")),
+    ("BS-IDENTITY-AUTHENTICATION-STRENGTH", "BND-IDENTITY-AUTHENTICATION-STRENGTH", "Authentication-strength enforcement", ("minimum authentication strength selected", "authentication enforcement scope", "weaker authentication methods rejected")),
+    ("BS-IDENTITY-SESSION-ASSURANCE", "BND-IDENTITY-SESSION-ASSURANCE", "Session assurance and authentication freshness", ("reauthentication freshness", "protected session continuation", "risk or event driven revalidation")),
+    ("BS-IDENTITY-AUTHENTICATION-SESSION-BINDING", "BND-IDENTITY-AUTHENTICATION-SESSION-BINDING", "Authentication transfer and session binding", ("authentication transfer prohibited", "authenticated state bound to originating context", "session token replay resistance")),
+    ("BS-IDENTITY-MANAGED-DEVICE-TRUST", "BND-IDENTITY-MANAGED-DEVICE-TRUST", "Managed-device authentication trust", ("trusted device identity", "device state assertion", "device trust policy enforced at authentication")),
 )
 
 BOUNDARY_SETS = tuple(

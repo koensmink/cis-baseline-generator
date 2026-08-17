@@ -681,4 +681,63 @@ def test_csv_and_json_export(tmp_path: Path) -> None:
         rows = list(csv.DictReader(handle))
     summary = json.loads(json_path.read_text(encoding="utf-8"))
     assert rows[0]["proposal"] == "Candidate Mandatory"
+    assert rows[0]["source_framework"] == "cis"
+    assert rows[0]["benchmark_family"] == "microsoft-windows-server"
+    assert rows[0]["benchmark_name"] == "Invented Microsoft Windows Server Benchmark"
+    assert rows[0]["benchmark_version"] == "v1.0"
+    assert rows[0]["profile"] == "L1"
     assert summary["proposal_counts"]["Candidate Mandatory"] == 1
+
+
+def test_composite_identity_separates_same_id_across_families() -> None:
+    windows = set_control("1.1.1", "Windows Firewall Domain firewall state enabled")
+    cloud = cloud_control(
+        "Configure an invented tenant preference",
+        control_id="1.1.1",
+        description="An invented tenant preference has no host firewall behavior.",
+    )
+    result = assess_controls_shadow([windows, cloud])
+    assert len(result.legacy_assessments) == 2
+    assert len({item.source_identity for item in result.legacy_assessments}) == 2
+    by_family = {
+        item.source_identity.benchmark_family: item
+        for item in result.shadow_assessments
+    }
+    assert by_family["microsoft-windows-server"].normative_boundary_definition_ids == (
+        "BND-NETWORK-HOST-FIREWALL",
+    )
+    assert by_family["microsoft-365-foundations"].normative_boundary_definition_ids == ()
+    assert all(
+        mapping.source_identity.benchmark_family == "microsoft-windows-server"
+        for mapping in result.mitigation_mappings
+    )
+
+
+def test_composite_identity_prevents_cross_version_boundary_completion() -> None:
+    version_one = set_control("2.1.1", "Windows Firewall Domain firewall state enabled")
+    version_two = set_control(
+        "2.1.1", "Windows Firewall Domain inbound connections block by default"
+    ).model_copy(update={"benchmark_version": "2.0"})
+    result = assess_controls_shadow([version_one, version_two])
+    assert len({item.source_identity for item in result.legacy_assessments}) == 2
+    assert all(item.proposal == "Review Required" for item in result.legacy_assessments)
+    assert all(
+        item.normative_proposal == "Review Required"
+        for item in result.shadow_assessments
+    )
+    assert len(result.boundary_evaluations) == 2
+    assert {item.benchmark_version for item in result.boundary_evaluations} == {
+        "v1.0",
+        "2.0",
+    }
+
+
+def test_composite_identity_separates_profiles_and_mixed_order_is_stable() -> None:
+    level_one = neutral_control(control_id="3.1.1", profile="L1")
+    level_two = neutral_control(control_id="3.1.1", profile="L2")
+    cloud = cloud_control("Configure an invented tenant preference", control_id="3.1.1")
+    controls = [level_one, level_two, cloud]
+    forward = assess_controls_shadow(controls)
+    reverse = assess_controls_shadow(reversed(controls))
+    assert forward.model_dump() == reverse.model_dump()
+    assert len({item.source_identity for item in forward.legacy_assessments}) == 3

@@ -1,19 +1,107 @@
 from __future__ import annotations
 
-from .schema import AttackPath
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from .identifiers import (
+    AttackPathId,
+    BoundaryId,
+    OutcomeId,
+    TechniqueId,
+    ThreatScenarioId,
+)
+from .provenance import CatalogObjectProvenance, Confidence, LifecycleStatus
+
+
+class AttackPath(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    attack_path_id: AttackPathId
+    name: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    ordered_stages: list[str] = Field(min_length=1)
+    entry_conditions: list[str] = Field(min_length=1)
+    intermediate_conditions: list[str] = Field(default_factory=list)
+    attacker_goals: list[str] = Field(min_length=1)
+    affected_assets: list[str] = Field(min_length=1)
+    security_outcome_ids: list[OutcomeId] = Field(min_length=1)
+    threat_scenario_ids: list[ThreatScenarioId] = Field(default_factory=list)
+    technique_ids: list[TechniqueId] = Field(default_factory=list)
+    boundary_ids: list[BoundaryId] = Field(min_length=1)
+    residual_path_description: str = Field(min_length=1)
+    lifecycle_status: LifecycleStatus
+    confidence: Confidence
+    provenance: CatalogObjectProvenance
+
+    @model_validator(mode="after")
+    def active_path_has_scenario(self) -> AttackPath:
+        if self.lifecycle_status == LifecycleStatus.ACTIVE and not self.threat_scenario_ids:
+            raise ValueError("Active AttackPath requires at least one ThreatScenario reference")
+        return self
+
+    @property
+    def stages(self) -> list[str]:
+        """Deprecated Phase-1 alias."""
+        return self.ordered_stages
+
+    @property
+    def security_outcomes(self) -> list[str]:
+        """Deprecated Phase-1 alias."""
+        return list(self.security_outcome_ids)
+
+    @property
+    def mitre_technique_ids(self) -> list[str]:
+        """Deprecated Phase-1 alias; MITRE IDs now live on technique mappings."""
+        return []
+
+
+_PROVENANCE = CatalogObjectProvenance(
+    catalog_authority="cis-pdf2csv security knowledge",
+    catalog_version="1.0",
+    object_version="1.0",
+    creation_method="deterministic curated catalog",
+    rationale_sources=["Security Knowledge Model"],
+)
+
+
+def _path(
+    number: int,
+    name: str,
+    description: str,
+    stages: list[str],
+    assets: list[str],
+    boundary_id: str,
+) -> AttackPath:
+    path_id = f"AP-{number:03d}"
+    return AttackPath(
+        attack_path_id=path_id,
+        name=name,
+        description=description,
+        ordered_stages=stages,
+        entry_conditions=[f"The conditions of TS-{number:03d} are present"],
+        intermediate_conditions=["The relevant security boundary is not fully enforced"],
+        attacker_goals=[name.lower()],
+        affected_assets=assets,
+        security_outcome_ids=[f"OUT-{number:03d}"],
+        threat_scenario_ids=[f"TS-{number:03d}"],
+        boundary_ids=[boundary_id],
+        residual_path_description="The path remains open when its required boundary effect is omitted.",
+        lifecycle_status=LifecycleStatus.ACTIVE,
+        confidence=Confidence.HIGH,
+        provenance=_PROVENANCE,
+    )
+
 
 ATTACK_PATHS = (
-    AttackPath(attack_path_id="AP-001", name="Credential relay and authentication interception", description="An attacker intercepts or relays authentication exchanges to impersonate a trusted identity.", stages=["credential access", "authentication", "lateral movement"], affected_assets=["identity providers", "network services", "credentials"], security_outcomes=["authentication integrity", "identity assurance"], mitre_technique_ids=["T1557", "T1550"]),
-    AttackPath(attack_path_id="AP-002", name="Credential extraction from operating-system memory", description="An attacker with local execution reads credential secrets or derivatives from protected operating-system processes.", stages=["execution", "privilege escalation", "credential access"], affected_assets=["operating-system memory", "credential authority", "administrative credentials"], security_outcomes=["credential confidentiality"], mitre_technique_ids=["T1003"]),
-    AttackPath(attack_path_id="AP-003", name="Lateral movement over administrative protocols", description="An attacker uses an administrative network protocol to move from one system to another.", stages=["authentication", "lateral movement"], affected_assets=["managed hosts", "administrative protocols"], security_outcomes=["network containment", "administrative access control"], mitre_technique_ids=["T1021"]),
-    AttackPath(attack_path_id="AP-004", name="Abuse of remote-management interfaces", description="An attacker reaches or misuses a remote administration interface to control a system.", stages=["initial access", "authentication", "execution"], affected_assets=["remote management services", "managed hosts"], security_outcomes=["secure administration"], mitre_technique_ids=["T1021"]),
-    AttackPath(attack_path_id="AP-005", name="Malicious code and script execution", description="Untrusted executable content reaches an execution surface and runs on the system.", stages=["delivery", "execution"], affected_assets=["applications", "scripts", "host processes"], security_outcomes=["execution integrity"], mitre_technique_ids=["T1059", "T1204"]),
-    AttackPath(attack_path_id="AP-006", name="Malware evasion and protection disablement", description="Malware evades behavioral prevention or disables protection so malicious activity can persist.", stages=["defense evasion", "persistence", "impact"], affected_assets=["malware protection stack", "host"], security_outcomes=["continuous prevention", "malware containment"], mitre_technique_ids=["T1562.001"]),
-    AttackPath(attack_path_id="AP-007", name="Unauthorized inbound network access", description="Unsolicited or unauthorized network traffic crosses the host boundary and reaches a service.", stages=["reconnaissance", "initial access"], affected_assets=["host network boundary", "listening services"], security_outcomes=["network access restriction"], mitre_technique_ids=[]),
-    AttackPath(attack_path_id="AP-008", name="Privilege elevation through weak consent boundaries", description="Code obtains administrative execution through absent, bypassable, or spoofable elevation consent.", stages=["execution", "privilege escalation"], affected_assets=["administrative tokens", "elevation interface"], security_outcomes=["privileged execution mediation"], mitre_technique_ids=["T1548.002"]),
-    AttackPath(attack_path_id="AP-009", name="Plaintext or weakly protected credential storage", description="Reusable credentials or weak derivatives remain recoverable from storage or delegated state.", stages=["credential access", "collection"], affected_assets=["credential stores", "delegated credentials", "password derivatives"], security_outcomes=["credential confidentiality"], mitre_technique_ids=["T1552"]),
-    AttackPath(attack_path_id="AP-010", name="Security-event suppression or loss of forensic evidence", description="Relevant security activity is not recorded or retained, preventing detection or investigation.", stages=["defense evasion", "detection", "investigation"], affected_assets=["security logs", "audit pipeline"], security_outcomes=["security visibility", "forensic integrity"], mitre_technique_ids=["T1070"]),
+    _path(1, "Credential relay and authentication interception", "An attacker intercepts or relays authentication exchanges to impersonate a trusted identity.", ["credential access", "authentication", "lateral movement"], ["identity providers", "network services", "credentials"], "BND-IDENTITY-AUTHENTICATION"),
+    _path(2, "Credential extraction from operating-system memory", "An attacker with local execution reads credential secrets or derivatives from protected operating-system processes.", ["execution", "privilege escalation", "credential access"], ["operating-system memory", "credential authority", "administrative credentials"], "BND-CREDENTIAL-MEMORY"),
+    _path(3, "Lateral movement over administrative protocols", "An attacker uses an administrative network protocol to move from one system to another.", ["authentication", "lateral movement"], ["managed hosts", "administrative protocols"], "BND-NETWORK-ADMINISTRATION"),
+    _path(4, "Abuse of remote-management interfaces", "An attacker reaches or misuses a remote administration interface to control a system.", ["initial access", "authentication", "execution"], ["remote management services", "managed hosts"], "BND-REMOTE-MANAGEMENT"),
+    _path(5, "Malicious code and script execution", "Untrusted executable content reaches an execution surface and runs on the system.", ["delivery", "execution"], ["applications", "scripts", "host processes"], "BND-EXECUTION-CONTROL"),
+    _path(6, "Malware evasion and protection disablement", "Malware evades behavioral prevention or disables protection so malicious activity can persist.", ["defense evasion", "persistence", "impact"], ["malware protection stack", "host"], "BND-MALWARE-PROTECTION"),
+    _path(7, "Unauthorized inbound network access", "Unsolicited or unauthorized network traffic crosses the host boundary and reaches a service.", ["reconnaissance", "initial access"], ["host network boundary", "listening services"], "BND-NETWORK-INBOUND"),
+    _path(8, "Privilege elevation through weak consent boundaries", "Code obtains administrative execution through absent, bypassable, or spoofable elevation consent.", ["execution", "privilege escalation"], ["administrative tokens", "elevation interface"], "BND-PRIVILEGE-ELEVATION"),
+    _path(9, "Plaintext or weakly protected credential storage", "Reusable credentials or weak derivatives remain recoverable from storage or delegated state.", ["credential access", "collection"], ["credential stores", "delegated credentials", "password derivatives"], "BND-CREDENTIAL-STORAGE"),
+    _path(10, "Security-event suppression or loss of forensic evidence", "Relevant security activity is not recorded or retained, preventing detection or investigation.", ["defense evasion", "detection", "investigation"], ["security logs", "audit pipeline"], "BND-MONITORING-EVIDENCE"),
 )
 
 ATTACK_PATH_BY_ID = {item.attack_path_id: item for item in ATTACK_PATHS}
-

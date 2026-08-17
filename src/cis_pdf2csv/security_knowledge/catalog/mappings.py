@@ -13,6 +13,9 @@ _MAPPINGS = (
     ("BS-RDP-SECURITY", "BS-REMOTE-RDP", "BND-REMOTE-RDP", ("CAP-01", "CAP-05", "CAP-08"), ("AP-003", "AP-004", "AP-012"), "Remote desktop is conditional when deployed."),
     ("BS-MALWARE-PROTECTION", "BS-ENDPOINT-MALWARE-PROTECTION", "BND-ENDPOINT-MALWARE-PROTECTION", ("CAP-07",), ("AP-005", "AP-006"), "Core prevention effects remain separate from scan tuning."),
     ("BS-PRIVILEGED-CREDENTIALS", "BS-IDENTITY-PRIVILEGED-CREDENTIALS", "BND-IDENTITY-PRIVILEGED-CREDENTIALS", ("CAP-02", "CAP-03"), ("AP-002", "AP-008", "AP-009"), "Credential and elevation effects share one evaluated boundary set."),
+    ("SEM-PASSWORD-AUTHENTICATION-STRENGTH", "BS-IDENTITY-PASSWORD-AUTHENTICATION", "BND-IDENTITY-PASSWORD-AUTHENTICATION", ("CAP-01", "CAP-02"), ("AP-014",), "Semantic mapping for reusable password-authentication-strength recommendations."),
+    ("SEM-EXTERNAL-IDENTITY-AUTHENTICATION", "BS-IDENTITY-EXTERNAL-AUTHENTICATION", "BND-IDENTITY-EXTERNAL-AUTHENTICATION", ("CAP-01",), ("AP-015",), "Semantic mapping for external, consumer, and peer online-identity trust restrictions."),
+    ("SEM-WEAK-PLAINTEXT-AUTHENTICATION", "BS-IDENTITY-WEAK-AUTHENTICATION", "BND-IDENTITY-WEAK-AUTHENTICATION", ("CAP-01", "CAP-02", "CAP-08"), ("AP-012",), "Semantic mapping for rejection of Basic or plaintext authentication."),
 )
 
 LEGACY_MIGRATION_MAP = tuple(

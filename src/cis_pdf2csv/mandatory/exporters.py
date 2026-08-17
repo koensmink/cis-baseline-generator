@@ -85,6 +85,9 @@ def write_shadow_comparison(
 
     differences_by_boundary: Counter[str] = Counter()
     differences_by_attack_path: Counter[str] = Counter()
+    mapping_gaps: Counter[str] = Counter(
+        item.mapping_gap_category for item in rows if item.mapping_gap_category is not None
+    )
     for item in rows:
         if item.proposals_match:
             continue
@@ -100,6 +103,7 @@ def write_shadow_comparison(
             not item.proposals_match and item.normative_proposal == "Review Required" for item in rows
         ),
         "missing_catalog_mappings": sum("SHADOW-MISSING-CATALOG-MAPPING" in item.difference_codes for item in rows),
+        "missing_catalog_mappings_by_category": dict(sorted(mapping_gaps.items())),
         "blocked_validations": sum("SHADOW-VALIDATION-BLOCKED" in item.difference_codes for item in rows),
         "differences_by_boundary": dict(sorted(differences_by_boundary.items())),
         "differences_by_attack_path": dict(sorted(differences_by_attack_path.items())),

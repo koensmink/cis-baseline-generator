@@ -34,6 +34,13 @@ sets, unresolved applicability or overlap, insufficient confidence, and
 validation findings produce Review Required. Supporting, fine-tuning,
 operational, information-hiding, and detection-only effects remain Regular.
 
+Unresolved applicability takes precedence over a non-qualifying boundary role.
+When deployment or benchmark applicability materially determines whether a
+recommendation should be evaluated, supporting, fine-tuning, operational,
+information-hiding, and detection-only controls remain Review Required until
+that applicability is resolved. This precedence never promotes such a control
+to Candidate Mandatory.
+
 ## Decision differences
 
 Every comparison carries stable `SHADOW-*` codes. Codes distinguish an exact
@@ -72,6 +79,12 @@ With shadow mode enabled, the normal legacy files are written as before, plus:
 - `mandatory-shadow-comparison.csv`;
 - `mandatory-shadow-comparison.json`; and
 - `mandatory-shadow-summary.json`.
+
+The summary separates missing mappings into qualifying effects lacking catalog
+coverage, optional enrichment for non-Mandatory effects, detection-oriented
+security-knowledge enrichment opportunities, and unresolved mappings required
+to finish a decision. These categories distinguish a decision blocker from an
+ordinary control that has not yet been semantically enriched.
 
 The comparison files explicitly label normative results `advisory`. The summary
 contains totals, exact matches, promotions, demotions, Review Required

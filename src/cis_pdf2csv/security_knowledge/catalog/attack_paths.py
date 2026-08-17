@@ -15,8 +15,10 @@ _PATHS = (
     ("AP-009", "Plaintext or weakly protected credential storage", ("TS-109",), ("TEC-006",), ("OUT-003", "OUT-002"), ("BND-IDENTITY-PRIVILEGED-CREDENTIALS",)),
     ("AP-010", "Security-event suppression and loss of forensic evidence", ("TS-115", "TS-116"), ("TEC-010",), ("OUT-013",), ("BND-MONITORING-SECURITY-AUDIT",)),
     ("AP-011", "Unsigned or untrusted application execution", ("TS-114",), ("TEC-008",), ("OUT-006",), ("BND-EXECUTION-APPLICATION-CONTROL", "BND-EXECUTION-SCRIPT-CONTROL")),
-    ("AP-012", "Unencrypted transport interception", ("TS-106", "TS-107", "TS-117"), ("TEC-002", "TEC-011"), ("OUT-003", "OUT-009", "OUT-010"), ("BND-CRYPTO-TRANSPORT", "BND-IDENTITY-LDAP-CHANNEL", "BND-IDENTITY-NTLM-SESSION", "BND-REMOTE-WINRM", "BND-REMOTE-RDP")),
+    ("AP-012", "Unencrypted transport interception", ("TS-106", "TS-107", "TS-117", "TS-121"), ("TEC-002", "TEC-011"), ("OUT-003", "OUT-009", "OUT-010"), ("BND-CRYPTO-TRANSPORT", "BND-IDENTITY-LDAP-CHANNEL", "BND-IDENTITY-NTLM-SESSION", "BND-REMOTE-WINRM", "BND-REMOTE-RDP", "BND-IDENTITY-WEAK-AUTHENTICATION")),
     ("AP-013", "Unencrypted data-at-rest exposure", ("TS-118",), ("TEC-012",), ("OUT-009", "OUT-014"), ("BND-DATA-STORAGE-ENCRYPTION",)),
+    ("AP-014", "Password guessing and weak-secret authentication", ("TS-119",), ("TEC-013",), ("OUT-002", "OUT-012"), ("BND-IDENTITY-PASSWORD-AUTHENTICATION",)),
+    ("AP-015", "Authentication through unapproved external identity trust", ("TS-120",), ("TEC-005",), ("OUT-002", "OUT-004"), ("BND-IDENTITY-EXTERNAL-AUTHENTICATION",)),
 )
 
 ATTACK_PATHS = tuple(

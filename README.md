@@ -159,91 +159,369 @@ Python 3.10 or later is required.
 
 ## CLI Usage
 
-The installed console commands are `cis-pdf2csv`, `cis-mandatory-analyze`, and `cis-intune-map`. The benchmark diff is implemented as the `cis_pdf2csv.diff` Python module. No standalone Security Knowledge/catalog CLI is currently registered; Mandatory output includes Security Knowledge enrichment and attack-path coverage.
+The package installs three console commands:
 
-### Parse to JSONL
+- `cis-pdf2csv` — parse one or more CIS Benchmark PDFs to structured CSV/JSONL, or pass one JSONL file to the Intune mapper;
+- `cis-mandatory-analyze` — run deterministic Mandatory-control preselection and attack-path coverage;
+- `cis-intune-map` — map parser-produced JSONL to Intune baseline artifacts.
+
+The benchmark diff is implemented as the Python module `cis_pdf2csv.diff`; no standalone diff console script is currently registered. There is also no standalone Security Knowledge or catalog CLI at this time.
+
+The registered console entry points are defined in [`pyproject.toml`](pyproject.toml). CLI implementation details are in [`src/cis_pdf2csv/cli.py`](src/cis_pdf2csv/cli.py), [`src/cis_pdf2csv/mandatory/cli.py`](src/cis_pdf2csv/mandatory/cli.py), [`src/cis_pdf2csv/intune_mapper/cli.py`](src/cis_pdf2csv/intune_mapper/cli.py), and [`src/cis_pdf2csv/diff.py`](src/cis_pdf2csv/diff.py).
+
+### CIS Benchmark parser
+
+#### Parse to JSONL
+
+Installed command:
 
 ```bash
 cis-pdf2csv benchmark.pdf -p L1 -o controls.jsonl --format jsonl
 ```
 
-### Parse to CSV
+Equivalent module invocation:
+
+```bash
+python -m cis_pdf2csv benchmark.pdf -p L1 -o controls.jsonl --format jsonl
+```
+
+The package-level module invocation is supported by [`src/cis_pdf2csv/__main__.py`](src/cis_pdf2csv/__main__.py).
+
+#### Parse to CSV
 
 ```bash
 cis-pdf2csv benchmark.pdf -p L1 -o controls.csv --format csv
 ```
 
-Multiple PDF inputs may be supplied to the parser. Output is sorted by benchmark name, benchmark version, and control ID.
+Equivalent module invocation:
+
+```bash
+python -m cis_pdf2csv benchmark.pdf -p L1 -o controls.csv --format csv
+```
+
+CSV output uses quoted UTF-8 with BOM for Excel compatibility.
+
+#### Parse without a profile filter
+
+```bash
+cis-pdf2csv benchmark.pdf -o controls.jsonl --format jsonl
+```
+
+When `-p/--profile` is omitted, all parser-recognized profiles are included.
+
+#### Parse multiple benchmark PDFs
+
+```bash
+cis-pdf2csv benchmark_v1.pdf benchmark_v2.pdf -p L1 -o combined.jsonl --format jsonl
+```
+
+All positional inputs must be PDFs in parser mode. Records are emitted in deterministic order by benchmark name, benchmark version, and control ID.
 
 ### Mandatory analysis and coverage
+
+Installed command:
 
 ```bash
 cis-mandatory-analyze controls.jsonl -o mandatory-review.csv
 ```
 
-This creates the full assessment, Candidate Mandatory and Review Required subsets, a summary JSON file, and an attack-path coverage JSON file alongside the requested output.
+Equivalent module invocation:
+
+```bash
+python -m cis_pdf2csv.mandatory.cli controls.jsonl -o mandatory-review.csv
+```
+
+For an output path such as `mandatory-review.csv`, the command writes:
+
+```text
+mandatory-review.csv
+mandatory-review-candidate-mandatory.csv
+mandatory-review-review-required.csv
+mandatory-review-summary.json
+mandatory-review-attack-path-coverage.json
+```
+
+The Mandatory engine consumes parser-produced `ControlRecord` JSONL. It does not modify the source JSONL.
+
+See:
+
+- [Mandatory Control Engine — Phase 1](docs/mandatory-control-phase1.md)
+- [Security Knowledge — Phase 1](docs/security-knowledge-phase1.md)
+- [Security Knowledge Model](docs/SECURITY_KNOWLEDGE_MODEL.md)
+- [Security Knowledge Catalog](docs/SECURITY_KNOWLEDGE_CATALOG.md)
+
+### Security Knowledge and catalog
+
+There is currently no dedicated Security Knowledge or catalog CLI. The authoritative catalog is represented in code and by the committed deterministic [`security-knowledge-catalog.json`](security-knowledge-catalog.json). Mandatory analysis produces Security Knowledge enrichment and attack-path coverage through the integrated analysis pipeline.
+
+See:
+
+- [Security Knowledge Model](docs/SECURITY_KNOWLEDGE_MODEL.md)
+- [Security Knowledge Catalog](docs/SECURITY_KNOWLEDGE_CATALOG.md)
+- [Security Knowledge Model implementation](docs/SECURITY_KNOWLEDGE_MODEL_IMPLEMENTATION.md)
+- [Security Knowledge architecture](docs/security_knowledge_architecture.svg)
+- [Catalog relationships](docs/security_knowledge_catalog.svg)
+
+### Benchmark diff
+
+The diff command compares two parser-produced JSONL exports.
+
+#### Basic CSV diff
+
+```bash
+python -m cis_pdf2csv.diff old.jsonl new.jsonl -o changes.csv
+```
+
+#### JSONL diff
+
+```bash
+python -m cis_pdf2csv.diff old.jsonl new.jsonl -o changes.jsonl --format jsonl
+```
+
+If `--format` is omitted, the output extension determines whether CSV or JSONL is written.
+
+#### Diff with summary and full reports
+
+```bash
+python -m cis_pdf2csv.diff old.jsonl new.jsonl \
+  -o changes.csv \
+  --report report.md \
+  --full-report report_full.md
+```
+
+The comparison reports added, removed, and field-level changed controls. The summary report provides aggregate and per-control change information; the full report additionally contains old/new field values for changed controls.
+
+#### Example: compare two benchmark versions
+
+```bash
+cis-pdf2csv benchmark_v1.pdf -p L1 -o v1.jsonl --format jsonl
+cis-pdf2csv benchmark_v2.pdf -p L1 -o v2.jsonl --format jsonl
+
+python -m cis_pdf2csv.diff v1.jsonl v2.jsonl \
+  -o changes.csv \
+  --report report.md \
+  --full-report report_full.md
+```
 
 ### Intune mapping
+
+Installed command:
 
 ```bash
 cis-intune-map controls.jsonl -o intune_out
 ```
 
-Advisory suggestions for unresolved Intune mapping work can be enabled explicitly:
+Equivalent module invocation:
 
 ```bash
-OPENAI_API_KEY=your_api_key cis-intune-map controls.jsonl -o intune_out --llm-fallback
+python -m cis_pdf2csv.intune_mapper.cli controls.jsonl -o intune_out
 ```
 
-If the flag is used without an API key, the implemented heuristic suggestion fallback is used. In either case, suggestions require human validation.
-
-### Benchmark diff
+The top-level parser CLI also detects a single JSONL input and dispatches it to the Intune mapper:
 
 ```bash
-python -m cis_pdf2csv.diff old.jsonl new.jsonl -o changes.csv \
-  --report report.md --full-report report_full.md
+cis-pdf2csv controls.jsonl -o intune_out
 ```
 
-Use `--format jsonl` or a `.jsonl` output path for JSONL diff output.
+The mapper writes:
+
+```text
+intune_out/
+├── baseline.csv
+├── manual_review.csv
+├── conflicts.csv
+├── intune_policies.json
+└── suggested_mappings.jsonl
+```
+
+### Intune LLM fallback
+
+LLM assistance is optional and applies only to controls that remain unresolved after deterministic mapping.
+
+With an OpenAI API key:
+
+```bash
+OPENAI_API_KEY=your_api_key \
+cis-intune-map controls.jsonl -o intune_out --llm-fallback
+```
+
+Equivalent module invocation:
+
+```bash
+OPENAI_API_KEY=your_api_key \
+python -m cis_pdf2csv.intune_mapper.cli controls.jsonl -o intune_out --llm-fallback
+```
+
+The top-level parser CLI can also dispatch JSONL to the mapper:
+
+```bash
+OPENAI_API_KEY=your_api_key \
+cis-pdf2csv controls.jsonl -o intune_out --llm-fallback
+```
+
+The optional model can be overridden:
+
+```bash
+OPENAI_API_KEY=your_api_key \
+OPENAI_MODEL=gpt-4.1-mini \
+cis-intune-map controls.jsonl -o intune_out --llm-fallback
+```
+
+If `--llm-fallback` is specified without `OPENAI_API_KEY`, the current implementation falls back to heuristic suggestions instead of making an OpenAI API call. Suggestions remain advisory and require validation.
 
 ## Containers
 
-Build with Docker or Podman:
+### Build
+
+Docker:
 
 ```bash
 docker build -t cis-pdf2csv .
+```
+
+Podman:
+
+```bash
 podman build -t cis-pdf2csv .
 ```
 
-The image entry point is the parser command:
+The image entry point is the parser command.
+
+### Parse a benchmark
+
+Docker:
 
 ```bash
-docker run --rm -v "$PWD:/work" -w /work cis-pdf2csv benchmark.pdf -p L1 -o controls.jsonl --format jsonl
-podman run --rm -v "$PWD:/work:Z" -w /work cis-pdf2csv benchmark.pdf -p L1 -o controls.jsonl --format jsonl
+docker run --rm \
+  -v "$PWD:/work" \
+  -w /work \
+  cis-pdf2csv \
+  benchmark.pdf -p L1 -o controls.jsonl --format jsonl
 ```
 
-Run Mandatory analysis by overriding the entry point:
+Podman:
 
 ```bash
-docker run --rm -v "$PWD:/work" -w /work --entrypoint python cis-pdf2csv -m cis_pdf2csv.mandatory.cli controls.jsonl -o mandatory-review.csv
-podman run --rm -v "$PWD:/work:Z" -w /work --entrypoint python cis-pdf2csv -m cis_pdf2csv.mandatory.cli controls.jsonl -o mandatory-review.csv
+podman run --rm \
+  -v "$PWD:/work:Z" \
+  -w /work \
+  cis-pdf2csv \
+  benchmark.pdf -p L1 -o controls.jsonl --format jsonl
 ```
 
-Run the Intune mapper similarly:
+### Run Mandatory analysis
+
+Docker:
 
 ```bash
-docker run --rm -v "$PWD:/work" -w /work --entrypoint python cis-pdf2csv -m cis_pdf2csv.intune_mapper.cli controls.jsonl -o intune_out
-podman run --rm -v "$PWD:/work:Z" -w /work --entrypoint python cis-pdf2csv -m cis_pdf2csv.intune_mapper.cli controls.jsonl -o intune_out
+docker run --rm \
+  -v "$PWD:/work" \
+  -w /work \
+  --entrypoint python \
+  cis-pdf2csv \
+  -m cis_pdf2csv.mandatory.cli controls.jsonl -o mandatory-review.csv
 ```
 
-Run a containerized diff:
+Podman:
 
 ```bash
-docker run --rm -v "$PWD:/work" -w /work --entrypoint python cis-pdf2csv -m cis_pdf2csv.diff old.jsonl new.jsonl -o changes.csv
-podman run --rm -v "$PWD:/work:Z" -w /work --entrypoint python cis-pdf2csv -m cis_pdf2csv.diff old.jsonl new.jsonl -o changes.csv
+podman run --rm \
+  -v "$PWD:/work:Z" \
+  -w /work \
+  --entrypoint python \
+  cis-pdf2csv \
+  -m cis_pdf2csv.mandatory.cli controls.jsonl -o mandatory-review.csv
 ```
 
-`:Z` is appropriate for Podman bind mounts on SELinux-enabled hosts.
+### Run the Intune mapper
+
+Docker:
+
+```bash
+docker run --rm \
+  -v "$PWD:/work" \
+  -w /work \
+  --entrypoint python \
+  cis-pdf2csv \
+  -m cis_pdf2csv.intune_mapper.cli controls.jsonl -o intune_out
+```
+
+Podman:
+
+```bash
+podman run --rm \
+  -v "$PWD:/work:Z" \
+  -w /work \
+  --entrypoint python \
+  cis-pdf2csv \
+  -m cis_pdf2csv.intune_mapper.cli controls.jsonl -o intune_out
+```
+
+### Run the Intune mapper with LLM fallback
+
+Docker:
+
+```bash
+docker run --rm \
+  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+  -v "$PWD:/work" \
+  -w /work \
+  --entrypoint python \
+  cis-pdf2csv \
+  -m cis_pdf2csv.intune_mapper.cli controls.jsonl -o intune_out --llm-fallback
+```
+
+Podman:
+
+```bash
+podman run --rm \
+  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+  -v "$PWD:/work:Z" \
+  -w /work \
+  --entrypoint python \
+  cis-pdf2csv \
+  -m cis_pdf2csv.intune_mapper.cli controls.jsonl -o intune_out --llm-fallback
+```
+
+### Compare two benchmark versions in containers
+
+Parse version 1:
+
+```bash
+docker run --rm \
+  -v "$PWD:/work" \
+  -w /work \
+  cis-pdf2csv \
+  benchmark_v1.pdf -p L1 -o v1.jsonl --format jsonl
+```
+
+Parse version 2:
+
+```bash
+docker run --rm \
+  -v "$PWD:/work" \
+  -w /work \
+  cis-pdf2csv \
+  benchmark_v2.pdf -p L1 -o v2.jsonl --format jsonl
+```
+
+Run the diff with both Markdown reports:
+
+```bash
+docker run --rm \
+  -v "$PWD:/work" \
+  -w /work \
+  --entrypoint python \
+  cis-pdf2csv \
+  -m cis_pdf2csv.diff v1.jsonl v2.jsonl \
+  -o changes.csv \
+  --report report.md \
+  --full-report report_full.md
+```
+
+Podman uses the same commands with `-v "$PWD:/work:Z"` where SELinux relabeling is required.
+
+> `:Z` is appropriate for Podman bind mounts on SELinux-enabled hosts. It is not required for ordinary Docker Desktop bind mounts.
 
 ## Repository Structure
 

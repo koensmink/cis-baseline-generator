@@ -5,7 +5,7 @@ from .registry import CatalogProvenance, SecurityCapability
 PROVENANCE = CatalogProvenance(
     authority="cis-pdf2csv security knowledge governance",
     method="human-curated technology-independent catalog definition",
-    catalog_version="1.1.0",
+    catalog_version="1.2.0",
     reviewed_by="security architecture review",
     reviewed_at="2026-08-17",
 )

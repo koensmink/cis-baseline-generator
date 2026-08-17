@@ -87,13 +87,15 @@ def _shadow_payload(item: ShadowMandatoryAssessment) -> dict[str, object]:
 
 
 def write_shadow_comparison(
-    assessments: Iterable[ShadowMandatoryAssessment], output_directory: Path
+    assessments: Iterable[ShadowMandatoryAssessment],
+    output_directory: Path,
+    output_stem: str = "mandatory",
 ) -> None:
     """Write byte-stable advisory comparison and summary artifacts."""
     rows = sorted(assessments, key=lambda item: item.source_identity.as_tuple())
-    json_path = output_directory / "mandatory-shadow-comparison.json"
-    csv_path = output_directory / "mandatory-shadow-comparison.csv"
-    summary_path = output_directory / "mandatory-shadow-summary.json"
+    json_path = output_directory / f"{output_stem}-shadow-comparison.json"
+    csv_path = output_directory / f"{output_stem}-shadow-comparison.csv"
+    summary_path = output_directory / f"{output_stem}-shadow-summary.json"
     json_path.write_text(
         json.dumps([_shadow_payload(item) for item in rows], indent=2, sort_keys=True, ensure_ascii=False) + "\n",
         encoding="utf-8",

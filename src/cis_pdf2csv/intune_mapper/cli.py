@@ -4,8 +4,8 @@ import argparse
 import json
 import os
 from pathlib import Path
-from typing import List
 
+from pydantic import ValidationError
 from rich.console import Console
 from rich.table import Table
 
@@ -24,15 +24,18 @@ from .suggestion_normalizer import normalize_suggestions
 console = Console()
 
 
-def _load_controls_jsonl(path: Path) -> List[MappingInputControl]:
-    controls: List[MappingInputControl] = []
+def _load_controls_jsonl(path: Path) -> list[MappingInputControl]:
+    controls: list[MappingInputControl] = []
 
     with path.open("r", encoding="utf-8") as f:
-        for line in f:
+        for line_number, line in enumerate(f, start=1):
             line = line.strip()
             if not line:
                 continue
-            controls.append(MappingInputControl(**json.loads(line)))
+            try:
+                controls.append(MappingInputControl(**json.loads(line)))
+            except (json.JSONDecodeError, ValidationError, TypeError) as exc:
+                raise ValueError(f"Invalid mapping input on line {line_number}: {exc}") from exc
 
     return controls
 
@@ -56,7 +59,7 @@ def _build_llm_client(enabled: bool, output_dir: Path):
             model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
             cache_path=cache_path,
         )
-    except Exception as e:
+    except (OSError, ValueError) as e:
         console.print(
             f"[yellow]Failed to initialize OpenAI client: {e}. "
             "Heuristic fallback will be used.[/yellow]"
@@ -64,7 +67,7 @@ def _build_llm_client(enabled: bool, output_dir: Path):
         return None
 
 
-def main(argv: List[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="cis-intune-map",
         description="Map parsed CIS controls to Intune baseline artifacts",
@@ -80,9 +83,17 @@ def main(argv: List[str] | None = None) -> int:
 
     input_path = Path(args.input)
     output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if not input_path.is_file():
+        parser.error(f"input file not found: {input_path}")
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        parser.error(f"cannot create output directory {output_dir}: {exc}")
 
-    controls = _load_controls_jsonl(input_path)
+    try:
+        controls = _load_controls_jsonl(input_path)
+    except (OSError, ValueError) as exc:
+        parser.error(str(exc))
     llm_client = _build_llm_client(args.llm_fallback, output_dir)
 
     result = resolve_controls(
@@ -94,12 +105,8 @@ def main(argv: List[str] | None = None) -> int:
     conflicts = result.conflicts
     suggestions = result.suggestions
 
-    # 🔑 FIX: veilig omgaan met model vs dict
     normalized_suggestions = normalize_suggestions(
-        [
-            s.model_dump() if hasattr(s, "model_dump") else s
-            for s in suggestions
-        ]
+        [suggestion.model_dump() for suggestion in suggestions]
     )
 
     write_baseline_csv(mappings, output_dir / "baseline.csv")

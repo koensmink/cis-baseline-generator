@@ -501,15 +501,17 @@ def test_shadow_export_is_deterministic_and_cli_requires_opt_in(tmp_path: Path) 
     input_path.write_text("\n".join(item.model_dump_json() for item in controls) + "\n", encoding="utf-8")
     output = tmp_path / "legacy.csv"
     assert mandatory_main([str(input_path), "-o", str(output)]) == 0
-    assert not (tmp_path / "mandatory-shadow-comparison.json").exists()
+    assert not (tmp_path / "legacy-shadow-comparison.json").exists()
     legacy_bytes = output.read_bytes()
 
     assert mandatory_main([str(input_path), "-o", str(output), "--shadow-normative"]) == 0
     assert output.read_bytes() == legacy_bytes
-    first = (tmp_path / "mandatory-shadow-comparison.json").read_bytes()
+    first = (tmp_path / "legacy-shadow-comparison.json").read_bytes()
     shadow = assess_controls_shadow(reversed(controls))
-    write_shadow_comparison(shadow.shadow_assessments, tmp_path)
-    assert (tmp_path / "mandatory-shadow-comparison.json").read_bytes() == first
+    write_shadow_comparison(shadow.shadow_assessments, tmp_path, "legacy")
+    assert (tmp_path / "legacy-shadow-comparison.json").read_bytes() == first
+    assert (tmp_path / "legacy-shadow-comparison.csv").exists()
+    assert (tmp_path / "legacy-shadow-summary.json").exists()
     assert json.loads(first)[0]["normative_status"] == "advisory"
 
 

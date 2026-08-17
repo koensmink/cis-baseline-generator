@@ -1,12 +1,23 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "cis-pdf2csv"
-version = "0.1.0"
-description = "Parse CIS Benchmark PDFs into evidence-grade CSV/JSONL"
+version = "1.0.0rc1"
+description = "Deterministic CIS benchmark parsing, security knowledge analysis, and Windows Intune mapping"
 requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Koen Smink" }]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Operating System :: OS Independent",
+]
 dependencies = [
   "pymupdf==1.24.9",
   "pydantic==2.8.2",

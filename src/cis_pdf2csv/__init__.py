@@ -1,2 +1,2 @@
-__all__ = ["parser", "intune_mapper"]
-__version__ = "0.1.0"
+__all__ = ["intune_mapper", "parser"]
+__version__ = "1.0.0rc1"

@@ -8,8 +8,9 @@ from pydantic import ValidationError
 from cis_pdf2csv.schema import ControlRecord
 from cis_pdf2csv.security_knowledge.exporters import write_coverage_json
 
-from .exporters import write_assessment_csv, write_summary_json
+from .exporters import write_assessment_csv, write_shadow_comparison, write_summary_json
 from .pipeline import assess_controls
+from .shadow import assess_controls_shadow
 
 
 def _load_jsonl(path: Path) -> list[ControlRecord]:
@@ -29,11 +30,18 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Deterministic Mandatory-control preselection")
     parser.add_argument("input", help="Parser-produced ControlRecord JSONL")
     parser.add_argument("-o", "--output", required=True, help="Full assessment CSV")
+    parser.add_argument(
+        "--shadow-normative",
+        action="store_true",
+        help="Also run the normative catalog pipeline in advisory shadow mode",
+    )
     args = parser.parse_args(argv)
 
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    assessments = assess_controls(_load_jsonl(Path(args.input)))
+    records = _load_jsonl(Path(args.input))
+    shadow_result = assess_controls_shadow(records) if args.shadow_normative else None
+    assessments = list(shadow_result.legacy_assessments) if shadow_result else assess_controls(records)
     write_assessment_csv(assessments, output)
     write_assessment_csv(
         (item for item in assessments if item.proposal == "Candidate Mandatory"),
@@ -48,6 +56,8 @@ def main(argv: list[str] | None = None) -> int:
         assessments,
         output.with_name(f"{output.stem}-attack-path-coverage.json"),
     )
+    if shadow_result:
+        write_shadow_comparison(shadow_result.shadow_assessments, output.parent)
     return 0
 
 

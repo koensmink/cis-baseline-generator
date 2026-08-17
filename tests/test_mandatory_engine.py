@@ -9,9 +9,16 @@ from typing import Any
 import pytest
 
 from cis_pdf2csv.mandatory.criteria import CRITERIA, match_criteria
-from cis_pdf2csv.mandatory.exporters import write_assessment_csv, write_summary_json
+from cis_pdf2csv.mandatory.cli import main as mandatory_main
+from cis_pdf2csv.mandatory.exporters import (
+    write_assessment_csv,
+    write_shadow_comparison,
+    write_summary_json,
+)
 from cis_pdf2csv.mandatory.features import extract_features
 from cis_pdf2csv.mandatory.pipeline import assess_controls
+from cis_pdf2csv.mandatory.shadow import assess_controls_shadow
+from cis_pdf2csv.mandatory.shadow import compare_shadow_assessments
 from cis_pdf2csv.schema import ControlRecord
 
 
@@ -418,6 +425,110 @@ def test_duplicate_effect_requires_review_but_complementary_effect_does_not() ->
     assert results["9.2.1"].overlap_type == "duplicate"
     assert results["9.2.3"].proposal == "Candidate Mandatory"
     assert results["9.2.3"].overlap_type == "complementary"
+
+
+def test_shadow_exact_match_and_complete_complementary_boundary() -> None:
+    controls = [
+        set_control("90.1", "Windows Firewall Domain firewall state enabled"),
+        set_control("90.2", "Windows Firewall Domain inbound connections block by default"),
+    ]
+    result = assess_controls_shadow(controls)
+    assert [item.proposal for item in result.legacy_assessments] == [
+        "Candidate Mandatory",
+        "Candidate Mandatory",
+    ]
+    assert all(item.normative_proposal == "Candidate Mandatory" for item in result.shadow_assessments)
+    assert all(item.proposals_match and item.cutover_eligible for item in result.shadow_assessments)
+    evaluation = result.boundary_evaluations[0]
+    assert evaluation.completeness_status == "complete_complementary_core_set"
+    assert evaluation.satisfied_sub_boundaries == evaluation.required_sub_boundaries
+    assert not evaluation.missing_sub_boundaries
+
+
+def test_shadow_missing_mapping_and_incomplete_boundary_require_review() -> None:
+    missing = assess_controls_shadow([control(title="Require firewall protection")])
+    item = missing.shadow_assessments[0]
+    assert item.normative_proposal == "Review Required"
+    assert "SHADOW-MISSING-CATALOG-MAPPING" in item.difference_codes
+
+    incomplete = assess_controls_shadow(
+        [set_control("91.1", "Windows Firewall Domain firewall state enabled")]
+    )
+    item = incomplete.shadow_assessments[0]
+    assert item.normative_proposal == "Review Required"
+    assert "SHADOW-INCOMPLETE-BOUNDARY" in item.difference_codes
+
+
+def test_shadow_supporting_control_remains_regular_and_legacy_is_unchanged() -> None:
+    controls = [
+        control("92.1", "Require firewall network boundary protection"),
+        control(
+            "92.2",
+            "Configure additional firewall reporting",
+            description="Supporting firewall reporting enhances the primary boundary.",
+            rationale="Additional firewall reporting is defense in depth.",
+        ),
+    ]
+    before = [item.model_dump() for item in assess_controls(controls)]
+    shadow = assess_controls_shadow(controls)
+    after = [item.model_dump() for item in shadow.legacy_assessments]
+    assert after == before
+    supporting = next(item for item in shadow.shadow_assessments if item.control_id == "92.2")
+    assert supporting.legacy_proposal == supporting.normative_proposal == "Regular Control"
+
+
+def test_shadow_export_is_deterministic_and_cli_requires_opt_in(tmp_path: Path) -> None:
+    controls = [
+        set_control("93.1", "Windows Firewall Domain firewall state enabled"),
+        set_control("93.2", "Windows Firewall Domain inbound connections block by default"),
+    ]
+    input_path = tmp_path / "controls.jsonl"
+    input_path.write_text("\n".join(item.model_dump_json() for item in controls) + "\n", encoding="utf-8")
+    output = tmp_path / "legacy.csv"
+    assert mandatory_main([str(input_path), "-o", str(output)]) == 0
+    assert not (tmp_path / "mandatory-shadow-comparison.json").exists()
+    legacy_bytes = output.read_bytes()
+
+    assert mandatory_main([str(input_path), "-o", str(output), "--shadow-normative"]) == 0
+    assert output.read_bytes() == legacy_bytes
+    first = (tmp_path / "mandatory-shadow-comparison.json").read_bytes()
+    shadow = assess_controls_shadow(reversed(controls))
+    write_shadow_comparison(shadow.shadow_assessments, tmp_path)
+    assert (tmp_path / "mandatory-shadow-comparison.json").read_bytes() == first
+    assert json.loads(first)[0]["normative_status"] == "advisory"
+
+
+def test_shadow_reports_normative_promotion_demotion_and_confidence_difference() -> None:
+    controls = [
+        set_control("94.1", "Windows Firewall Domain firewall state enabled"),
+        set_control("94.2", "Windows Firewall Domain inbound connections block by default"),
+    ]
+    legacy = assess_controls(controls)
+    promoted_legacy = legacy[0].model_copy(update={"proposal": "Regular Control"})
+    promoted = compare_shadow_assessments(controls, [promoted_legacy, legacy[1]])
+    first = next(item for item in promoted.shadow_assessments if item.control_id == "94.1")
+    assert first.normative_proposal == "Candidate Mandatory"
+    assert "SHADOW-NORMATIVE-PROMOTION" in first.difference_codes
+
+    demoted_legacy = legacy[0].model_copy(update={"confidence": "Medium"})
+    demoted = compare_shadow_assessments(controls, [demoted_legacy, legacy[1]])
+    first = next(item for item in demoted.shadow_assessments if item.control_id == "94.1")
+    assert first.normative_proposal == "Review Required"
+    assert "SHADOW-NORMATIVE-DEMOTION" in first.difference_codes
+    assert "SHADOW-CONFIDENCE-DIFFERENCE" in first.difference_codes
+
+
+def test_shadow_unresolved_applicability_is_advisory_review() -> None:
+    controls = [
+        set_control("95.1", "Windows Firewall Domain firewall state enabled"),
+        set_control("95.2", "Windows Firewall Domain inbound connections block by default"),
+    ]
+    legacy = assess_controls(controls)
+    unresolved = legacy[0].model_copy(update={"applicability_mode": "unresolved"})
+    result = compare_shadow_assessments(controls, [unresolved, legacy[1]])
+    first = next(item for item in result.shadow_assessments if item.control_id == "95.1")
+    assert first.normative_proposal == "Review Required"
+    assert "SHADOW-APPLICABILITY-DIFFERENCE" in first.difference_codes
 
 
 def test_firewall_logging_and_fine_tuning_are_not_core_members() -> None:

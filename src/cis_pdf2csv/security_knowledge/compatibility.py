@@ -6,6 +6,7 @@ from cis_pdf2csv.mandatory.schema import MandatoryAssessment
 
 from .catalog import SECURITY_KNOWLEDGE_CATALOG
 from .catalog.registry import SecurityKnowledgeCatalog
+from .catalog.registry import LegacyKnowledgeMigration
 from .catalog.validation import ValidationFinding
 
 
@@ -28,12 +29,26 @@ class CompatibilityResult(BaseModel):
     proposal_overrides: dict[str, str] = Field(default_factory=dict)
 
 
+def resolve_legacy_boundary_set(
+    legacy_boundary_set_id: str | None,
+    catalog: SecurityKnowledgeCatalog = SECURITY_KNOWLEDGE_CATALOG,
+) -> LegacyKnowledgeMigration | None:
+    """Resolve one Phase-1 identity without applying a proposal override."""
+    return next(
+        (
+            item
+            for item in catalog.migration_map
+            if item.legacy_boundary_set_id == legacy_boundary_set_id
+        ),
+        None,
+    )
+
+
 def adapt_phase1_assessments(
     assessments: list[MandatoryAssessment],
     catalog: SecurityKnowledgeCatalog = SECURITY_KNOWLEDGE_CATALOG,
 ) -> CompatibilityResult:
     """Resolve Phase-1 IDs without feeding normative objects into classification."""
-    migrations = {item.legacy_boundary_set_id: item for item in catalog.migration_map}
     resolutions: list[CatalogResolution] = []
     findings: list[ValidationFinding] = []
     overrides: dict[str, str] = {}
@@ -41,7 +56,7 @@ def adapt_phase1_assessments(
         if assessment.proposal != "Candidate Mandatory":
             continue
         legacy_id = assessment.boundary_set_id
-        migration = migrations.get(legacy_id or "")
+        migration = resolve_legacy_boundary_set(legacy_id, catalog)
         if migration is None:
             findings.append(
                 ValidationFinding(

@@ -55,6 +55,8 @@ class BoundaryCandidate(BaseModel):
     satisfied_sub_boundaries: tuple[str, ...] = ()
     boundary_role: str = "boundary_set_core_member"
     non_compensable: bool = False
+    evaluation_scope: str = "benchmark"
+    attack_path_ids: tuple[str, ...] = ()
 
 
 class BenchmarkFamilyAdapter(ABC):

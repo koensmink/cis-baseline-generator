@@ -64,6 +64,13 @@ managed-device mapping is Review Required until benchmark-scope deployment is
 resolved. Tenant-wide access policy, feature-specific policy, service-specific
 policy, and conditional deployment remain distinct normalized scopes.
 
+Within application and workload identity security, the adapter deterministically
+recognizes restricted and accountable application registration, constrained user
+and administrator consent, least-privilege service-principal authorization, and
+issuer/subject/audience-bound workload federation. Each mapping requires behavior
+evidence for its individual effects. Inventory, reporting, audit instructions,
+titles, consent terminology, or federation terminology cannot complete a boundary.
+
 ## Windows isolation
 
 Windows Server keeps its SMB, LDAP, NTLM, WinRM, RDP, Windows Firewall,

@@ -20,9 +20,13 @@ _SETS = (
     ("BS-IDENTITY-MULTIFACTOR-AUTHENTICATION", "BND-IDENTITY-MULTIFACTOR-AUTHENTICATION", "Multifactor authentication enforcement", ("additional independent authentication factor", "authentication enforcement scope", "authentication bypass resistance")),
     ("BS-IDENTITY-PHISHING-RESISTANT-AUTHENTICATION", "BND-IDENTITY-PHISHING-RESISTANT-AUTHENTICATION", "Phishing-resistant authentication", ("cryptographic verifier binding", "origin or channel binding", "credential replay and proxy resistance")),
     ("BS-IDENTITY-AUTHENTICATION-STRENGTH", "BND-IDENTITY-AUTHENTICATION-STRENGTH", "Authentication-strength enforcement", ("minimum authentication strength selected", "authentication enforcement scope", "weaker authentication methods rejected")),
-    ("BS-IDENTITY-SESSION-ASSURANCE", "BND-IDENTITY-SESSION-ASSURANCE", "Session assurance and authentication freshness", ("reauthentication freshness", "protected session continuation", "risk or event driven revalidation")),
+    ("BS-IDENTITY-SESSION-ASSURANCE", "BND-IDENTITY-SESSION-ASSURANCE", "Session assurance and authentication freshness", ("reauthentication freshness", "protected session continuation")),
     ("BS-IDENTITY-AUTHENTICATION-SESSION-BINDING", "BND-IDENTITY-AUTHENTICATION-SESSION-BINDING", "Authentication transfer and session binding", ("authentication transfer prohibited", "authenticated state bound to originating context", "session token replay resistance")),
     ("BS-IDENTITY-MANAGED-DEVICE-TRUST", "BND-IDENTITY-MANAGED-DEVICE-TRUST", "Managed-device authentication trust", ("trusted device identity", "device state assertion", "device trust policy enforced at authentication")),
+    ("BS-IDENTITY-APPLICATION-REGISTRATION-AUTHORIZATION", "BND-IDENTITY-APPLICATION-REGISTRATION-AUTHORIZATION", "Application registration authorization", ("application identity creation restricted", "application registrar authority constrained", "application ownership accountability established")),
+    ("BS-IDENTITY-APPLICATION-CONSENT-AUTHORIZATION", "BND-IDENTITY-APPLICATION-CONSENT-AUTHORIZATION", "Application consent authorization", ("untrusted application consent restricted", "privileged permission grant independently approved", "permission grant scope constrained")),
+    ("BS-IDENTITY-SERVICE-PRINCIPAL-AUTHORIZATION", "BND-IDENTITY-SERVICE-PRINCIPAL-AUTHORIZATION", "Service-principal authorization", ("non-human principal privilege constrained", "non-human principal authorization explicit", "non-human principal authorization lifecycle enforced")),
+    ("BS-IDENTITY-WORKLOAD-IDENTITY-TRUST", "BND-IDENTITY-WORKLOAD-IDENTITY-TRUST", "Workload identity trust", ("workload identity issuer constrained", "workload identity subject constrained", "workload identity audience constrained")),
 )
 
 BOUNDARY_SETS = tuple(

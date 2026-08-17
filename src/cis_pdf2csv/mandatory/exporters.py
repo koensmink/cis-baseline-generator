@@ -108,6 +108,23 @@ def write_shadow_comparison(
         "differences_by_boundary": dict(sorted(differences_by_boundary.items())),
         "differences_by_attack_path": dict(sorted(differences_by_attack_path.items())),
         "cutover_eligible_controls": [item.control_id for item in rows if item.cutover_eligible],
+        "multi_boundary_controls": [
+            item.control_id for item in rows if len(item.normative_boundary_definition_ids) > 1
+        ],
+        "fully_resolved_controls": [
+            item.control_id for item in rows
+            if item.normative_boundary_definition_ids
+            and "SHADOW-INCOMPLETE-BOUNDARY" not in item.difference_codes
+            and "SHADOW-MISSING-CATALOG-MAPPING" not in item.difference_codes
+        ],
+        "partially_resolved_controls": [
+            item.control_id for item in rows
+            if item.normative_boundary_definition_ids
+            and "SHADOW-INCOMPLETE-BOUNDARY" in item.difference_codes
+        ],
+        "review_required_controls": [
+            item.control_id for item in rows if item.normative_proposal == "Review Required"
+        ],
         "legacy_proposal_counts": dict(sorted(Counter(item.legacy_proposal for item in rows).items())),
         "normative_advisory_proposal_counts": dict(sorted(Counter(item.normative_proposal for item in rows).items())),
     }

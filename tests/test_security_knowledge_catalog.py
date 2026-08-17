@@ -7,6 +7,8 @@ from dataclasses import replace
 import pytest
 
 from cis_pdf2csv.mandatory.schema import MandatoryAssessment
+from cis_pdf2csv.mandatory.shadow import compare_shadow_assessments
+from cis_pdf2csv.schema import ControlRecord
 from cis_pdf2csv.security_knowledge.catalog import (
     SECURITY_KNOWLEDGE_CATALOG,
     build_catalog,
@@ -112,3 +114,46 @@ def test_adapter_enriches_27_candidates_without_changing_phase1_counts() -> None
     assert result.proposal_overrides == {}
     assert all(item.threat_scenario_ids and item.security_outcome_ids for item in result.resolutions)
     assert Counter(item.proposal for item in all_assessments) == {"Candidate Mandatory": 27, "Review Required": 5, "Regular Control": 275}
+
+
+def test_shadow_validation_block_prevents_candidate_decision() -> None:
+    catalog = SECURITY_KNOWLEDGE_CATALOG
+    capability = catalog.capabilities[3].model_copy(update={"lifecycle_status": "deprecated"})
+    invalid = replace(
+        catalog,
+        capabilities=catalog.capabilities[:3] + (capability,) + catalog.capabilities[4:],
+    )
+    record = ControlRecord.model_validate(
+        {
+            "benchmark_name": "Invented Benchmark",
+            "benchmark_version": "1",
+            "benchmark_date": "2026",
+            "control_id": "S-001",
+            "profile": "L1",
+            "title": "Invented network boundary effect",
+            "assessment": "Automated",
+            "applicability": "All invented systems",
+            "description": "Invented description.",
+            "rationale": "Invented rationale.",
+            "audit": "Invented audit.",
+            "remediation": "Invented remediation.",
+            "page_start": 1,
+            "page_end": 1,
+            "source_pdf_sha256": "a" * 64,
+            "block_text_sha256": "b" * 64,
+            "extracted_at_utc": "2026-01-01T00:00:00Z",
+        }
+    )
+    legacy = assessment("S-001", "Candidate Mandatory", "BS-HOST-FIREWALL-DOMAIN")
+    legacy = legacy.model_copy(
+        update={
+            "relationship": "standalone primary boundary",
+            "confidence": "High",
+            "applicability_mode": "universal",
+        }
+    )
+    result = compare_shadow_assessments([record], [legacy], catalog=invalid)
+    shadow = result.shadow_assessments[0]
+    assert shadow.normative_proposal == "Review Required"
+    assert "SHADOW-VALIDATION-BLOCKED" in shadow.difference_codes
+    assert not shadow.cutover_eligible

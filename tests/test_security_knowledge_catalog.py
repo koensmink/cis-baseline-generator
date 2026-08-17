@@ -41,8 +41,8 @@ def finding_codes(catalog: SecurityKnowledgeCatalog) -> set[str]:
 def test_authoritative_catalog_builds_with_zero_errors() -> None:
     catalog = build_catalog()
     assert catalog.validate() == ()
-    assert (len(catalog.capabilities), len(catalog.boundary_definitions), len(catalog.boundary_set_definitions)) == (10, 16, 12)
-    assert (len(catalog.threat_scenarios), len(catalog.attack_techniques), len(catalog.attack_paths), len(catalog.security_outcomes)) == (21, 13, 15, 14)
+    assert (len(catalog.capabilities), len(catalog.boundary_definitions), len(catalog.boundary_set_definitions)) == (10, 17, 13)
+    assert (len(catalog.threat_scenarios), len(catalog.attack_techniques), len(catalog.attack_paths), len(catalog.security_outcomes)) == (22, 13, 16, 14)
 
 
 def test_catalog_serialization_is_deterministic_and_round_trips() -> None:

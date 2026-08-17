@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 
 from cis_pdf2csv.schema import ControlRecord
+from cis_pdf2csv.security_knowledge.adapters import BenchmarkFamily, select_adapter
 
 from .schema import ApplicabilityMode, OverlapType
 
@@ -63,6 +64,9 @@ def _membership(
 
 
 def identify_boundary_membership(control: ControlRecord) -> BoundaryMembership | None:
+    selection = select_adapter(control)
+    if selection.family != BenchmarkFamily.MICROSOFT_WINDOWS_SERVER:
+        return None
     title = " ".join(control.title.lower().split())
     context = " ".join(
         part

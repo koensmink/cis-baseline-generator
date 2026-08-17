@@ -16,6 +16,7 @@ _MAPPINGS = (
     ("SEM-PASSWORD-AUTHENTICATION-STRENGTH", "BS-IDENTITY-PASSWORD-AUTHENTICATION", "BND-IDENTITY-PASSWORD-AUTHENTICATION", ("CAP-01", "CAP-02"), ("AP-014",), "Semantic mapping for reusable password-authentication-strength recommendations."),
     ("SEM-EXTERNAL-IDENTITY-AUTHENTICATION", "BS-IDENTITY-EXTERNAL-AUTHENTICATION", "BND-IDENTITY-EXTERNAL-AUTHENTICATION", ("CAP-01",), ("AP-015",), "Semantic mapping for external, consumer, and peer online-identity trust restrictions."),
     ("SEM-WEAK-PLAINTEXT-AUTHENTICATION", "BS-IDENTITY-WEAK-AUTHENTICATION", "BND-IDENTITY-WEAK-AUTHENTICATION", ("CAP-01", "CAP-02", "CAP-08"), ("AP-012",), "Semantic mapping for rejection of Basic or plaintext authentication."),
+    ("SEM-PRIVILEGED-ROLE-ACTIVATION", "BS-IDENTITY-PRIVILEGED-ACTIVATION", "BND-IDENTITY-PRIVILEGED-ACTIVATION", ("CAP-01", "CAP-03"), ("AP-016",), "Semantic mapping for independently approved activation of eligible privileged roles."),
 )
 
 LEGACY_MIGRATION_MAP = tuple(

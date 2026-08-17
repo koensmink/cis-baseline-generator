@@ -19,6 +19,7 @@ _PATHS = (
     ("AP-013", "Unencrypted data-at-rest exposure", ("TS-118",), ("TEC-012",), ("OUT-009", "OUT-014"), ("BND-DATA-STORAGE-ENCRYPTION",)),
     ("AP-014", "Password guessing and weak-secret authentication", ("TS-119",), ("TEC-013",), ("OUT-002", "OUT-012"), ("BND-IDENTITY-PASSWORD-AUTHENTICATION",)),
     ("AP-015", "Authentication through unapproved external identity trust", ("TS-120",), ("TEC-005",), ("OUT-002", "OUT-004"), ("BND-IDENTITY-EXTERNAL-AUTHENTICATION",)),
+    ("AP-016", "Privilege escalation through unapproved role activation", ("TS-122",), ("TEC-007",), ("OUT-004", "OUT-012"), ("BND-IDENTITY-PRIVILEGED-ACTIVATION",)),
 )
 
 ATTACK_PATHS = tuple(

@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from cis_pdf2csv.schema import ControlRecord
+from cis_pdf2csv.security_knowledge.adapters import select_adapter
 from cis_pdf2csv.security_knowledge.boundaries import CompletenessStatus
 from cis_pdf2csv.security_knowledge.catalog import SECURITY_KNOWLEDGE_CATALOG
 from cis_pdf2csv.security_knowledge.catalog.registry import SecurityKnowledgeCatalog
@@ -129,16 +130,11 @@ def _strength(role: str) -> Literal["primary", "complementary", "supporting"]:
 
 def _semantic_boundary_id(control: ControlRecord) -> str | None:
     """Resolve reusable shadow concepts from behavior-bearing title semantics."""
-    title = " ".join(control.title.lower().split())
-    if "password must meet complexity requirements" in title:
-        return "SEM-PASSWORD-AUTHENTICATION-STRENGTH"
-    if "block all consumer microsoft account user authentication" in title:
-        return "SEM-EXTERNAL-IDENTITY-AUTHENTICATION"
-    if "pku2u authentication" in title and "online identities" in title:
-        return "SEM-EXTERNAL-IDENTITY-AUTHENTICATION"
-    if "basic" in title and "authentication" in title and "http" in title:
-        return "SEM-WEAK-PLAINTEXT-AUTHENTICATION"
-    return None
+    selection = select_adapter(control)
+    if selection.adapter is None:
+        return None
+    candidates = selection.adapter.identify_boundary_candidates(control)
+    return candidates[0].semantic_mapping_id if len(candidates) == 1 else None
 
 
 def _mapping_gap_category(assessment: MandatoryAssessment) -> MappingGapCategory:
@@ -284,6 +280,16 @@ def compare_shadow_assessments(
         evaluation = evaluations.get(effective_boundary_id or "")
         mappings = tuple(sorted(mappings_by_control[legacy.control_id], key=lambda item: item.mapping_id))
         findings: list[ShadowValidationFinding] = list(catalog_blockers)
+        adapter_selection = select_adapter(controls[legacy.control_id])
+        if adapter_selection.finding:
+            findings.append(
+                ShadowValidationFinding(
+                    code=adapter_selection.finding,
+                    severity="warning",
+                    message="Benchmark-family adapter selection did not resolve exactly one supported family.",
+                    review_required=True,
+                )
+            )
         if migration is None:
             findings.append(ShadowValidationFinding(code="CATALOG_MAPPING_MISSING", severity="warning", message="No compatibility migration resolves this control to the normative catalog.", review_required=True))
         if evaluation and evaluation.completeness_status == CompletenessStatus.INCOMPLETE_BOUNDARY:

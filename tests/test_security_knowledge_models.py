@@ -443,7 +443,7 @@ def test_audit_only_mapping_evidence_is_rejected() -> None:
 
 def invented_control(control_id: str, title: str) -> ControlRecord:
     values: dict[str, Any] = {
-        "benchmark_name": "Invented benchmark",
+        "benchmark_name": "Invented Microsoft Windows Server Benchmark",
         "benchmark_version": "1.0",
         "benchmark_date": "2026",
         "control_id": control_id,

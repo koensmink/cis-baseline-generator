@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import re
 import hashlib
-from typing import Iterator, Optional, Tuple, Dict, List
+import re
+from collections.abc import Iterator
+from dataclasses import dataclass
 
 import fitz
-
 
 SECTION_HEADINGS = [
     "Profile Applicability",
@@ -49,9 +49,50 @@ RE_HEADER = re.compile(
 
 
 RE_BENCHMARK_META = re.compile(
-    r"^CIS\s+Microsoft\s+Windows\s+Server\s+(?P<product>\d{4}(?:\s*R2)?)\s+Benchmark",
+    r"\bCIS\s+Microsoft\s+Windows\s+Server\s+(?P<product>\d{4}(?:\s*R2)?)(?:\s+Stand-alone)?(?:\s+Benchmark)?\b",
     re.IGNORECASE,
 )
+
+RE_M365_BENCHMARK_META = re.compile(
+    r"\bCIS\s+Microsoft\s+365\s+Foundations\s+Benchmark\b",
+    re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True)
+class BenchmarkIdentity:
+    family: str
+    benchmark_name: str
+    finding: str | None = None
+
+
+def detect_benchmark_identity(lines: list[str]) -> BenchmarkIdentity:
+    """Detect a supported family from benchmark-title evidence."""
+    evidence = " ".join(" ".join(line.split()) for line in lines[:50])
+    windows_matches = list(RE_BENCHMARK_META.finditer(evidence))
+    m365_matches = list(RE_M365_BENCHMARK_META.finditer(evidence))
+    if windows_matches and m365_matches:
+        return BenchmarkIdentity(
+            family="ambiguous",
+            benchmark_name="Unknown CIS Benchmark",
+            finding="BENCHMARK_FAMILY_AMBIGUOUS",
+        )
+    if windows_matches:
+        product = windows_matches[0].group("product")
+        return BenchmarkIdentity(
+            family="microsoft-windows-server",
+            benchmark_name=f"CIS Microsoft Windows Server {product} Benchmark",
+        )
+    if m365_matches:
+        return BenchmarkIdentity(
+            family="microsoft-365-foundations",
+            benchmark_name="CIS Microsoft 365 Foundations Benchmark",
+        )
+    return BenchmarkIdentity(
+        family="unknown",
+        benchmark_name="Unknown CIS Benchmark",
+        finding="BENCHMARK_FAMILY_UNSUPPORTED",
+    )
 
 
 RE_VERSION_DATE = re.compile(
@@ -87,7 +128,7 @@ def _normalize_heading(line: str) -> str:
     return line.strip().rstrip(":").strip().lower()
 
 
-def _flatten_lines(lines: List[str]) -> Optional[str]:
+def _flatten_lines(lines: list[str]) -> str | None:
     """
     Join multiline section text into a single normalized line.
     This avoids visible \\n characters in CSV / Excel output.
@@ -110,9 +151,9 @@ def _looks_like_control_start(line: str) -> bool:
 
 
 def _consume_multiline_header(
-    lines: List[Tuple[int, str]],
+    lines: list[tuple[int, str]],
     start_index: int,
-) -> Tuple[str, int]:
+) -> tuple[str, int]:
     """
     Consume one or more lines that together form a single control header.
 
@@ -187,7 +228,7 @@ def find_body_start_page(pdf_path: str) -> int:
     return 1
 
 
-def iter_pdf_lines(pdf_path: str, start_page: int) -> Iterator[Tuple[int, str]]:
+def iter_pdf_lines(pdf_path: str, start_page: int) -> Iterator[tuple[int, str]]:
     doc = fitz.open(pdf_path)
 
     for i in range(start_page - 1, doc.page_count):
@@ -200,21 +241,18 @@ def iter_pdf_lines(pdf_path: str, start_page: int) -> Iterator[Tuple[int, str]]:
                 yield (i + 1, ln)
 
 
-def extract_benchmark_meta(pdf_path: str) -> Tuple[str, str, str]:
+def extract_benchmark_meta(pdf_path: str) -> tuple[str, str, str]:
     doc = fitz.open(pdf_path)
 
     text = _normalize_text(doc.load_page(0).get_text("text"))
     lines = [l.strip() for l in text.splitlines() if l.strip()]
 
-    name = "CIS Microsoft Windows Server Benchmark"
+    identity = detect_benchmark_identity(lines)
+    name = identity.benchmark_name
     version = ""
     date = ""
 
     for idx, ln in enumerate(lines[:50]):
-        m = RE_BENCHMARK_META.match(ln)
-        if m:
-            name = f"CIS Microsoft Windows Server {m.group('product')} Benchmark"
-
         m2 = RE_VERSION_DATE.match(ln.replace("–", "-"))
         if m2:
             version = f"v{m2.group('version')}"
@@ -239,7 +277,7 @@ def _split_title_applicability(raw_title: str):
     return title.strip(), "; ".join(applicability) if applicability else None
 
 
-def _profile_from_applicability(text: Optional[str]):
+def _profile_from_applicability(text: str | None):
     if not text:
         return "Unknown"
 
@@ -254,7 +292,7 @@ def _profile_from_applicability(text: Optional[str]):
     return "Unknown"
 
 
-def _is_real_control(sections: Dict[str, Optional[str]]) -> bool:
+def _is_real_control(sections: dict[str, str | None]) -> bool:
     """
     Reject TOC blocks.
     Only accept if real CIS body sections exist.
@@ -262,24 +300,21 @@ def _is_real_control(sections: Dict[str, Optional[str]]) -> bool:
     if sections.get("audit") or sections.get("remediation"):
         return True
 
-    if sections.get("applicability"):
-        return True
-
-    return False
+    return bool(sections.get("applicability"))
 
 
-def parse_controls(pdf_path: str, profile_filter: Optional[str] = None) -> List[Dict]:
+def parse_controls(pdf_path: str, profile_filter: str | None = None) -> list[dict]:
     with open(pdf_path, "rb") as f:
         pdf_hash = sha256_bytes(f.read())
 
     bench_name, bench_version, bench_date = extract_benchmark_meta(pdf_path)
     start_page = find_body_start_page(pdf_path)
 
-    controls: List[Dict] = []
+    controls: list[dict] = []
 
-    current: Optional[Dict] = None
-    current_lines: List[str] = []
-    current_end_page: Optional[int] = None
+    current: dict | None = None
+    current_lines: list[str] = []
+    current_end_page: int | None = None
 
     lines = list(iter_pdf_lines(pdf_path, start_page))
     i = 0
@@ -317,22 +352,22 @@ def parse_controls(pdf_path: str, profile_filter: Optional[str] = None) -> List[
 
             title, applicability_tag = _split_title_applicability(raw_title)
 
-            current = dict(
-                benchmark_name=bench_name,
-                benchmark_version=bench_version,
-                benchmark_date=bench_date,
-                control_id=control_id,
-                profile="Unknown",
-                title=title,
-                assessment=assessment,
-                applicability=applicability_tag,
-                page_start=page,
-                page_end=page,
-                source_pdf_sha256=pdf_hash,
-                extracted_at_utc=_utc_now(),
-                parser_version="0.4.1",
-                block_text_sha256="",
-            )
+            current = {
+                "benchmark_name": bench_name,
+                "benchmark_version": bench_version,
+                "benchmark_date": bench_date,
+                "control_id": control_id,
+                "profile": "Unknown",
+                "title": title,
+                "assessment": assessment,
+                "applicability": applicability_tag,
+                "page_start": page,
+                "page_end": page,
+                "source_pdf_sha256": pdf_hash,
+                "extracted_at_utc": _utc_now(),
+                "parser_version": "0.4.1",
+                "block_text_sha256": "",
+            }
 
             current_lines = []
             current_end_page = lines[last_header_index][0]
@@ -376,10 +411,10 @@ def parse_controls(pdf_path: str, profile_filter: Optional[str] = None) -> List[
 def _utc_now():
     import datetime
 
-    return datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    return datetime.datetime.now(datetime.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def _extract_sections(block_text: str) -> Dict[str, Optional[str]]:
+def _extract_sections(block_text: str) -> dict[str, str | None]:
     """
     Extract CIS control sections from a control text block.
 
@@ -397,7 +432,7 @@ def _extract_sections(block_text: str) -> Dict[str, Optional[str]]:
     """
     lines = [ln.strip() for ln in block_text.splitlines() if ln.strip()]
 
-    sections_accumulator: Dict[str, List[str]] = {
+    sections_accumulator: dict[str, list[str]] = {
         "applicability": [],
         "description": [],
         "rationale": [],

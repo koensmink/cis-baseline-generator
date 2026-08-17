@@ -64,6 +64,12 @@ membership while resolving it to generic catalog boundary and boundary-set
 definitions. This is migration compatibility, not an assertion that a generic
 catalog object contains CIS control identifiers.
 
+Semantic adapters for other benchmark families require corroborating behavior
+evidence from description, rationale, or remediation. A title match alone does
+not create a normative mapping. Product-specific host boundary rules remain in
+their product adapter and are not applied to explicitly identified cloud-suite
+benchmarks.
+
 ## Cutover eligibility
 
 `cutover_eligible` is reporting metadata only. It is true only when proposals

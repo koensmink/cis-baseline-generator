@@ -31,7 +31,7 @@ Catalog provenance records the allocation authority, curation method, catalog ve
 
 The capability catalog contains the immutable `CAP-01` through `CAP-10` set: identity and authentication protection, credential protection, privileged execution control, network boundary protection, secure remote management, application and code execution control, malware prevention and response, cryptographic and transport protection, security monitoring and investigation, and data protection. Each object states included and excluded security effects and technology-independent examples.
 
-The active boundary catalog contains host firewall, SMB session, LDAP channel, NTLM session, WinRM, RDP, endpoint malware protection, privileged credentials, application control, script control, generic transport cryptography, storage encryption, security audit, password-authentication strength, external identity authentication, and weak/plaintext authentication surfaces. Twelve boundary sets define their minimum-effective combinations. Profile and deployment choices remain evaluation context, not generic catalog identity.
+The active boundary catalog contains host firewall, SMB session, LDAP channel, NTLM session, WinRM, RDP, endpoint malware protection, privileged credentials, application control, script control, generic transport cryptography, storage encryption, security audit, password-authentication strength, external identity authentication, weak/plaintext authentication, and privileged-role activation surfaces. Thirteen boundary sets define their minimum-effective combinations. Profile and deployment choices remain evaluation context, not generic catalog identity.
 
 The additional authentication threat chains cover password guessing,
 authentication through an unapproved external identity trust, and capture or
@@ -40,6 +40,12 @@ concepts remain incomplete until their distinct required effects,
 applicability, and non-compensability are supported by attributable evidence;
 the presence of a generic catalog concept alone does not qualify a Candidate
 Mandatory decision.
+
+Privileged-role activation is distinct from operating-system elevation: it
+governs the transition from eligible or dormant authority to active
+administrative authority. Its reusable threat chain covers activation without
+independent approval and applies to cloud, identity, infrastructure, and other
+just-in-time privilege systems.
 
 The initial threat catalog contains eighteen concrete scenarios, including inbound-service exposure, administrative lateral movement, SMB and LDAP relay, NTLM downgrade and weak session protection, remote-management interception and abuse, credential extraction, weak elevation consent, protection disablement, malware evasion, untrusted execution, audit suppression and evidence loss, plaintext credential interception, and unencrypted storage exposure. Every active scenario contains actor position, preconditions, assets, weakness, action, objective, immediate outcome, technical impact, boundary and technique references, High confidence, evidence, and provenance.
 

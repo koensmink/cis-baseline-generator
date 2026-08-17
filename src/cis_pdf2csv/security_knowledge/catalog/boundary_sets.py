@@ -16,6 +16,7 @@ _SETS = (
     ("BS-IDENTITY-PASSWORD-AUTHENTICATION", "BND-IDENTITY-PASSWORD-AUTHENTICATION", "Password authentication strength", ("weak password selection constrained", "online guessing rate constrained")),
     ("BS-IDENTITY-EXTERNAL-AUTHENTICATION", "BND-IDENTITY-EXTERNAL-AUTHENTICATION", "External identity authentication", ("unapproved external identity trust rejected", "accepted identity authorities authenticated")),
     ("BS-IDENTITY-WEAK-AUTHENTICATION", "BND-IDENTITY-WEAK-AUTHENTICATION", "Weak and plaintext authentication", ("Basic or plaintext authentication rejected",)),
+    ("BS-IDENTITY-PRIVILEGED-ACTIVATION", "BND-IDENTITY-PRIVILEGED-ACTIVATION", "Privileged role activation", ("activation independently approved", "activation scope and duration constrained")),
 )
 
 BOUNDARY_SETS = tuple(

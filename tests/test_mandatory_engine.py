@@ -26,7 +26,7 @@ from cis_pdf2csv.schema import ControlRecord
 
 def control(control_id: str = "1.1", title: str = "Require firewall protection", **changes: Any) -> ControlRecord:
     values: dict[str, Any] = {
-        "benchmark_name": "Invented Security Benchmark",
+        "benchmark_name": "Invented Microsoft Windows Server Benchmark",
         "benchmark_version": "v1.0",
         "benchmark_date": "January 2026",
         "control_id": control_id,
@@ -574,6 +574,79 @@ def test_shadow_unresolved_applicability_is_advisory_review() -> None:
     first = next(item for item in result.shadow_assessments if item.control_id == "95.1")
     assert first.normative_proposal == "Review Required"
     assert "SHADOW-APPLICABILITY-DIFFERENCE" in first.difference_codes
+
+
+def cloud_control(title: str, **changes: Any) -> ControlRecord:
+    return neutral_control(
+        benchmark_name="Invented Microsoft 365 Foundations Benchmark",
+        benchmark_version="1.0",
+        applicability="All licensed tenant users",
+        title=title,
+        **changes,
+    )
+
+
+def test_cloud_legacy_authentication_reuses_generic_weak_authentication_boundary() -> None:
+    item = cloud_control(
+        "Block legacy authentication for tenant access",
+        description="The tenant rejects legacy authentication exchanges.",
+        rationale="Legacy authentication permits replayable credentials without modern verification.",
+        remediation="Configure access policy to reject legacy authentication.",
+    )
+    shadow = assess_controls_shadow([item])
+    assessment = shadow.shadow_assessments[0]
+    assert assessment.normative_boundary_definition_ids == (
+        "BND-IDENTITY-WEAK-AUTHENTICATION",
+    )
+    assert assessment.attack_path_ids == ("AP-012",)
+
+
+def test_cloud_privileged_activation_resolves_new_generic_boundary() -> None:
+    item = cloud_control(
+        "Ensure approval is required for privileged role activation",
+        description="Eligible privileged authority remains dormant until activation.",
+        rationale="Independent approval prevents unreviewed privileged activation.",
+        remediation="Require an approver for each privileged role activation.",
+    )
+    first = assess_controls_shadow([item])
+    second = assess_controls_shadow(reversed([item]))
+    assessment = first.shadow_assessments[0]
+    assert assessment.normative_boundary_definition_ids == (
+        "BND-IDENTITY-PRIVILEGED-ACTIVATION",
+    )
+    assert assessment.attack_path_ids == ("AP-016",)
+    assert first.model_dump() == second.model_dump()
+
+
+def test_cloud_semantic_mapping_requires_behavior_evidence_not_title_alone() -> None:
+    item = cloud_control("Block legacy authentication for tenant access")
+    assessment = assess_controls_shadow([item]).shadow_assessments[0]
+    assert not assessment.normative_boundary_definition_ids
+    assert "SHADOW-MISSING-CATALOG-MAPPING" in assessment.difference_codes
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Require SMB signing",
+        "Require LDAP signing",
+        "Refuse NTLM authentication",
+        "Disable WinRM Basic authentication",
+        "Require RDP network-level authentication",
+        "Enable Windows Firewall",
+        "Enable Defender real-time protection",
+        "Enable UAC admin approval mode",
+    ],
+)
+def test_windows_host_boundary_rules_do_not_apply_to_explicit_cloud_benchmark(
+    title: str,
+) -> None:
+    item = cloud_control(
+        title,
+        description="An invented cloud preference with no host protocol behavior.",
+    )
+    assessment = assess_controls([item])[0]
+    assert assessment.boundary_set_id is None
 
 
 def test_firewall_logging_and_fine_tuning_are_not_core_members() -> None:

@@ -18,7 +18,7 @@ from cis_pdf2csv.security_knowledge.exporters import write_coverage_json
 
 def invented_control(control_id: str, title: str, **changes: Any) -> ControlRecord:
     values: dict[str, Any] = {
-        "benchmark_name": "Invented Server Benchmark",
+        "benchmark_name": "Invented Microsoft Windows Server Benchmark",
         "benchmark_version": "1.0",
         "benchmark_date": "2026",
         "control_id": control_id,

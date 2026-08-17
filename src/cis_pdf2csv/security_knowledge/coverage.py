@@ -53,6 +53,47 @@ def evaluate_mapping_coverage(
     return result
 
 
+def build_normative_coverage_report(
+    assessments: list[MandatoryAssessment],
+) -> dict[str, object]:
+    """Project Phase-1 assessments through the catalog without numeric risk scoring."""
+    from .catalog import SECURITY_KNOWLEDGE_CATALOG
+    from .compatibility import adapt_phase1_assessments
+
+    result = adapt_phase1_assessments(assessments, SECURITY_KNOWLEDGE_CATALOG)
+    represented_paths = {identifier for item in result.resolutions for identifier in item.attack_path_ids}
+    represented_capabilities = {identifier for item in result.resolutions for identifier in item.capability_ids}
+    represented_threats = {identifier for item in result.resolutions for identifier in item.threat_scenario_ids}
+    represented_outcomes = {identifier for item in result.resolutions for identifier in item.security_outcome_ids}
+    by_boundary: dict[str, set[str]] = defaultdict(set)
+    for assessment in assessments:
+        if assessment.boundary_set_id:
+            by_boundary[assessment.boundary_set_id].add(assessment.relationship)
+    complete_complementary = sorted(
+        identifier for identifier, roles in by_boundary.items()
+        if "boundary-set core member" in roles and any(item.proposal == "Candidate Mandatory" and item.boundary_set_id == identifier for item in assessments)
+    )
+    standalone = sorted(
+        item.control_id for item in assessments
+        if item.proposal == "Candidate Mandatory" and item.relationship == "standalone primary boundary"
+    )
+    supporting_only = sorted(identifier for identifier, roles in by_boundary.items() if roles <= {"supporting hardening", "fine-tuning"})
+    detection_only = sorted(identifier for identifier, roles in by_boundary.items() if roles == {"detection-only"})
+    incomplete = sorted({item.boundary_set_id for item in assessments if item.proposal == "Review Required" and item.boundary_set_id})
+    return {
+        "attack_paths_with_no_effective_mitigation": sorted({path.attack_path_id for path in SECURITY_KNOWLEDGE_CATALOG.attack_paths} - represented_paths),
+        "complete_standalone_primary_coverage": standalone,
+        "complete_complementary_core_coverage": complete_complementary,
+        "supporting_only_coverage": supporting_only,
+        "detection_only_coverage": detection_only,
+        "incomplete_boundaries": incomplete,
+        "capabilities_represented": sorted(represented_capabilities),
+        "threat_scenarios_represented": sorted(represented_threats),
+        "outcomes_represented": sorted(represented_outcomes),
+        "unresolved_migration_mappings": [item.model_dump(mode="json") for item in result.findings],
+    }
+
+
 def build_coverage_report(assessments: list[MandatoryAssessment]) -> dict[str, object]:
     controls: dict[str, set[str]] = defaultdict(set)
     candidates: dict[str, set[str]] = defaultdict(set)

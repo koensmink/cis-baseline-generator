@@ -19,7 +19,6 @@ from cis_pdf2csv.security_knowledge.boundaries import (
     DeploymentState,
 )
 from cis_pdf2csv.security_knowledge.capabilities import CAPABILITIES
-from cis_pdf2csv.security_knowledge.compatibility import adapt_phase1_assessments
 from cis_pdf2csv.security_knowledge.coverage import evaluate_mapping_coverage
 from cis_pdf2csv.security_knowledge.evidence import EvidenceItem, EvidenceType
 from cis_pdf2csv.security_knowledge.identifiers import (
@@ -43,6 +42,9 @@ from cis_pdf2csv.security_knowledge.mitigation import (
     MitigationMapping,
     MitigationRole,
     MitigationStrength,
+)
+from cis_pdf2csv.security_knowledge.phase1_mapping_adapter import (
+    adapt_phase1_assessments_to_mappings,
 )
 from cis_pdf2csv.security_knowledge.provenance import (
     CatalogObjectProvenance,
@@ -473,8 +475,8 @@ def test_phase1_compatibility_adapter_is_deterministic_and_non_mutating() -> Non
     ]
     assessments = assess_controls(controls)
     original = [item.model_dump() for item in assessments]
-    forward = adapt_phase1_assessments(controls, assessments)
-    reverse = adapt_phase1_assessments(list(reversed(controls)), list(reversed(assessments)))
+    forward = adapt_phase1_assessments_to_mappings(controls, assessments)
+    reverse = adapt_phase1_assessments_to_mappings(list(reversed(controls)), list(reversed(assessments)))
     assert forward.model_dump(mode="json") == reverse.model_dump(mode="json")
     assert [item.model_dump() for item in assessments] == original
     assert all(item.boundary_role == BoundaryRole.BOUNDARY_SET_CORE_MEMBER for item in forward.mappings)

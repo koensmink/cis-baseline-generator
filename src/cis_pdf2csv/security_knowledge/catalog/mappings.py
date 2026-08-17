@@ -17,6 +17,12 @@ _MAPPINGS = (
     ("SEM-EXTERNAL-IDENTITY-AUTHENTICATION", "BS-IDENTITY-EXTERNAL-AUTHENTICATION", "BND-IDENTITY-EXTERNAL-AUTHENTICATION", ("CAP-01",), ("AP-015",), "Semantic mapping for external, consumer, and peer online-identity trust restrictions."),
     ("SEM-WEAK-PLAINTEXT-AUTHENTICATION", "BS-IDENTITY-WEAK-AUTHENTICATION", "BND-IDENTITY-WEAK-AUTHENTICATION", ("CAP-01", "CAP-02", "CAP-08"), ("AP-012",), "Semantic mapping for rejection of Basic or plaintext authentication."),
     ("SEM-PRIVILEGED-ROLE-ACTIVATION", "BS-IDENTITY-PRIVILEGED-ACTIVATION", "BND-IDENTITY-PRIVILEGED-ACTIVATION", ("CAP-01", "CAP-03"), ("AP-016",), "Semantic mapping for independently approved activation of eligible privileged roles."),
+    ("SEM-MULTIFACTOR-AUTHENTICATION", "BS-IDENTITY-MULTIFACTOR-AUTHENTICATION", "BND-IDENTITY-MULTIFACTOR-AUTHENTICATION", ("CAP-01", "CAP-02"), ("AP-017",), "Semantic mapping for access-enforced multifactor authentication."),
+    ("SEM-PHISHING-RESISTANT-AUTHENTICATION", "BS-IDENTITY-PHISHING-RESISTANT-AUTHENTICATION", "BND-IDENTITY-PHISHING-RESISTANT-AUTHENTICATION", ("CAP-01", "CAP-02", "CAP-08"), ("AP-018",), "Semantic mapping for verifier-bound phishing-resistant authentication."),
+    ("SEM-AUTHENTICATION-STRENGTH", "BS-IDENTITY-AUTHENTICATION-STRENGTH", "BND-IDENTITY-AUTHENTICATION-STRENGTH", ("CAP-01", "CAP-02"), ("AP-018",), "Semantic mapping for enforced minimum authentication strength."),
+    ("SEM-SESSION-ASSURANCE", "BS-IDENTITY-SESSION-ASSURANCE", "BND-IDENTITY-SESSION-ASSURANCE", ("CAP-01", "CAP-02"), ("AP-020",), "Semantic mapping for authentication freshness and session assurance."),
+    ("SEM-AUTHENTICATION-SESSION-BINDING", "BS-IDENTITY-AUTHENTICATION-SESSION-BINDING", "BND-IDENTITY-AUTHENTICATION-SESSION-BINDING", ("CAP-01", "CAP-02", "CAP-08"), ("AP-019",), "Semantic mapping for blocked authentication transfer and bound authenticated state."),
+    ("SEM-MANAGED-DEVICE-AUTHENTICATION-TRUST", "BS-IDENTITY-MANAGED-DEVICE-TRUST", "BND-IDENTITY-MANAGED-DEVICE-TRUST", ("CAP-01", "CAP-08"), ("AP-021",), "Semantic mapping for device trust enforced at authentication."),
 )
 
 LEGACY_MIGRATION_MAP = tuple(

@@ -16,6 +16,7 @@ _TECHNIQUES = (
     ("TEC-010", "Audit-log suppression", "Prevent, remove, or impair security-event evidence.", "defense evasion", "T1070"),
     ("TEC-011", "Plaintext credential interception", "Observe credentials transmitted without adequate protection.", "credential access", "T1557"),
     ("TEC-012", "Data access through missing encryption", "Read data exposed because cryptographic storage protection is absent.", "collection", None),
+    ("TEC-013", "Password guessing", "Attempt candidate passwords until an account accepts one.", "credential access", "T1110"),
 )
 
 TECHNIQUES = tuple(

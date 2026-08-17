@@ -13,6 +13,9 @@ _SETS = (
     ("BS-REMOTE-RDP", "BND-REMOTE-RDP", "RDP secure access", ("network-level authentication", "TLS security layer", "high encryption", "restricted remote-logon right")),
     ("BS-ENDPOINT-MALWARE-PROTECTION", "BND-ENDPOINT-MALWARE-PROTECTION", "Malware protection stack", ("real-time prevention", "behavior monitoring", "network protection", "disablement resistance")),
     ("BS-IDENTITY-PRIVILEGED-CREDENTIALS", "BND-IDENTITY-PRIVILEGED-CREDENTIALS", "Privileged credential and execution protection", ("privileged consent", "credential isolation", "weak credential storage disabled")),
+    ("BS-IDENTITY-PASSWORD-AUTHENTICATION", "BND-IDENTITY-PASSWORD-AUTHENTICATION", "Password authentication strength", ("weak password selection constrained", "online guessing rate constrained")),
+    ("BS-IDENTITY-EXTERNAL-AUTHENTICATION", "BND-IDENTITY-EXTERNAL-AUTHENTICATION", "External identity authentication", ("unapproved external identity trust rejected", "accepted identity authorities authenticated")),
+    ("BS-IDENTITY-WEAK-AUTHENTICATION", "BND-IDENTITY-WEAK-AUTHENTICATION", "Weak and plaintext authentication", ("Basic or plaintext authentication rejected",)),
 )
 
 BOUNDARY_SETS = tuple(

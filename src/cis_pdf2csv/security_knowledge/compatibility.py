@@ -5,8 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from cis_pdf2csv.mandatory.schema import MandatoryAssessment
 
 from .catalog import SECURITY_KNOWLEDGE_CATALOG
-from .catalog.registry import SecurityKnowledgeCatalog
-from .catalog.registry import LegacyKnowledgeMigration
+from .catalog.registry import LegacyKnowledgeMigration, SecurityKnowledgeCatalog
 from .catalog.validation import ValidationFinding
 
 

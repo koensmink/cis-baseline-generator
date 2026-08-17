@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from cis_pdf2csv.mandatory.criteria import CRITERIA, match_criteria
 from cis_pdf2csv.mandatory.cli import main as mandatory_main
+from cis_pdf2csv.mandatory.criteria import CRITERIA, match_criteria
 from cis_pdf2csv.mandatory.exporters import (
     write_assessment_csv,
     write_shadow_comparison,
@@ -17,8 +17,10 @@ from cis_pdf2csv.mandatory.exporters import (
 )
 from cis_pdf2csv.mandatory.features import extract_features
 from cis_pdf2csv.mandatory.pipeline import assess_controls
-from cis_pdf2csv.mandatory.shadow import assess_controls_shadow
-from cis_pdf2csv.mandatory.shadow import compare_shadow_assessments
+from cis_pdf2csv.mandatory.shadow import (
+    assess_controls_shadow,
+    compare_shadow_assessments,
+)
 from cis_pdf2csv.schema import ControlRecord
 
 
@@ -444,6 +446,19 @@ def test_shadow_exact_match_and_complete_complementary_boundary() -> None:
     assert evaluation.satisfied_sub_boundaries == evaluation.required_sub_boundaries
     assert not evaluation.missing_sub_boundaries
 
+    mappings_by_control = {
+        control_id: {
+            item.enforced_sub_boundary
+            for item in result.mitigation_mappings
+            if item.control_id == control_id
+        }
+        for control_id in ("90.1", "90.2")
+    }
+    assert mappings_by_control == {
+        "90.1": {"stateful firewall enforcement"},
+        "90.2": {"default-deny inbound policy"},
+    }
+
 
 def test_shadow_missing_mapping_and_incomplete_boundary_require_review() -> None:
     missing = assess_controls_shadow([control(title="Require firewall protection")])
@@ -510,12 +525,42 @@ def test_shadow_reports_normative_promotion_demotion_and_confidence_difference()
     assert first.normative_proposal == "Candidate Mandatory"
     assert "SHADOW-NORMATIVE-PROMOTION" in first.difference_codes
 
-    demoted_legacy = legacy[0].model_copy(update={"confidence": "Medium"})
+    demoted_legacy = legacy[0].model_copy(update={"confidence": "Low"})
     demoted = compare_shadow_assessments(controls, [demoted_legacy, legacy[1]])
     first = next(item for item in demoted.shadow_assessments if item.control_id == "94.1")
     assert first.normative_proposal == "Review Required"
     assert "SHADOW-NORMATIVE-DEMOTION" in first.difference_codes
     assert "SHADOW-CONFIDENCE-DIFFERENCE" in first.difference_codes
+
+
+@pytest.mark.parametrize(
+    "relationship",
+    [
+        "supporting hardening",
+        "fine-tuning",
+        "detection-only",
+        "information-hiding",
+        "operational",
+    ],
+)
+def test_shadow_unresolved_applicability_takes_precedence_over_supporting_role(
+    relationship: str,
+) -> None:
+    record = neutral_control(
+        control_id="94.3",
+        title="Configure smart card removal behavior",
+        applicability="Where smart cards are deployed",
+    )
+    legacy = assess_controls([record])[0].model_copy(
+        update={
+            "proposal": "Review Required",
+            "relationship": relationship,
+            "applicability_mode": "unresolved",
+        }
+    )
+    shadow = compare_shadow_assessments([record], [legacy]).shadow_assessments[0]
+    assert shadow.normative_proposal == "Review Required"
+    assert "SHADOW-APPLICABILITY-DIFFERENCE" in shadow.difference_codes
 
 
 def test_shadow_unresolved_applicability_is_advisory_review() -> None:

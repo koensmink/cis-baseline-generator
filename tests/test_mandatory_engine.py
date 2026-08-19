@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -513,6 +515,145 @@ def test_shadow_export_is_deterministic_and_cli_requires_opt_in(tmp_path: Path) 
     assert (tmp_path / "legacy-shadow-comparison.csv").exists()
     assert (tmp_path / "legacy-shadow-summary.json").exists()
     assert json.loads(first)[0]["normative_status"] == "advisory"
+
+
+def _read_csv(path: Path) -> list[dict[str, str]]:
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def test_cli_reports_production_counts_and_writes_deterministic_review_queues(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    controls = [
+        control("95.1", "Require firewall network boundary protection"),
+        control(
+            "95.2",
+            "Firewall applicability requires review",
+            applicability="Where applicable to invented systems",
+        ),
+        neutral_control(control_id="95.3"),
+    ]
+    input_path = tmp_path / "invented.jsonl"
+    input_path.write_text(
+        "\n".join(item.model_dump_json() for item in reversed(controls)) + "\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "review.csv"
+
+    assert mandatory_main([str(input_path), "-o", str(output)]) == 0
+    rendered = capsys.readouterr().out
+    assert "cis-mandatory-analyze summary" in rendered
+    assert re.search(r"Candidate Mandatory\s+│\s+1\s+│", rendered)
+    assert re.search(r"Review Required\s+│\s+1\s+│", rendered)
+    assert re.search(r"Regular Control\s+│\s+1\s+│", rendered)
+    assert re.search(r"Total\s+│\s+3\s+│", rendered)
+    assert "Candidate output:" in rendered
+    assert "review-candidate-mandatory.csv" in rendered
+    assert "Review output:" in rendered
+    assert "review-review-required.csv" in rendered
+    assert "Full assessment:" in rendered
+    assert "review.csv" in rendered
+
+    full = _read_csv(output)
+    candidates = _read_csv(tmp_path / "review-candidate-mandatory.csv")
+    reviews = _read_csv(tmp_path / "review-review-required.csv")
+    assert len(full) == 3
+    assert [item["proposal"] for item in candidates] == ["Candidate Mandatory"]
+    assert [item["proposal"] for item in reviews] == ["Review Required"]
+    assert candidates[0]["title"] == controls[0].title
+    assert reviews[0]["title"] == controls[1].title
+    candidate_bytes = (tmp_path / "review-candidate-mandatory.csv").read_bytes()
+    review_bytes = (tmp_path / "review-review-required.csv").read_bytes()
+    assert mandatory_main([str(input_path), "-o", str(output)]) == 0
+    capsys.readouterr()
+    assert (tmp_path / "review-candidate-mandatory.csv").read_bytes() == candidate_bytes
+    assert (tmp_path / "review-review-required.csv").read_bytes() == review_bytes
+
+
+def test_titles_are_bound_to_composite_source_identity(tmp_path: Path) -> None:
+    controls = [
+        neutral_control(
+            control_id="96.1",
+            title="Version one title",
+            benchmark_name="Invented Windows Server Benchmark",
+            benchmark_version="v1",
+            profile="L1",
+        ),
+        neutral_control(
+            control_id="96.1",
+            title="Version two title",
+            benchmark_name="Invented Windows Server Benchmark",
+            benchmark_version="v2",
+            profile="L2",
+        ),
+        neutral_control(
+            control_id="96.1",
+            title="Different benchmark title",
+            benchmark_name="Invented Microsoft 365 Benchmark",
+            benchmark_version="v1",
+            profile="L1",
+        ),
+    ]
+    assessments = assess_controls(reversed(controls))
+    output = tmp_path / "identities.csv"
+    write_assessment_csv(assessments, output)
+    rows = _read_csv(output)
+    actual = {
+        (row["benchmark_name"], row["benchmark_version"], row["profile"]): row["title"]
+        for row in rows
+    }
+    assert actual == {
+        (item.benchmark_name, item.benchmark_version, item.profile): item.title
+        for item in controls
+    }
+
+
+def test_windows_server_reference_counts_and_review_exports(tmp_path: Path) -> None:
+    input_path = Path(__file__).parents[1] / "controls-windows-server-2025-l1.jsonl"
+    output = tmp_path / "windows.csv"
+    assert mandatory_main([str(input_path), "-o", str(output)]) == 0
+    full = _read_csv(output)
+    candidates = _read_csv(tmp_path / "windows-candidate-mandatory.csv")
+    reviews = _read_csv(tmp_path / "windows-review-required.csv")
+    assert Counter(row["proposal"] for row in full) == {
+        "Candidate Mandatory": 27,
+        "Review Required": 5,
+        "Regular Control": 275,
+    }
+    assert len(full) == 307
+    assert len(candidates) == 27
+    assert len(reviews) == 5
+    assert all(row["title"] for row in candidates + reviews)
+
+
+def test_shadow_mode_keeps_production_summary_and_stem_isolation(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    records = [control(), neutral_control(control_id="97.1")]
+    input_path = tmp_path / "shadow.jsonl"
+    input_path.write_text(
+        "\n".join(item.model_dump_json() for item in records) + "\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "scoped.csv"
+    assert mandatory_main(
+        [str(input_path), "-o", str(output), "--shadow-normative"]
+    ) == 0
+    rendered = capsys.readouterr().out
+    assert "Advisory shadow output" in rendered
+    assert re.search(r"Candidate Mandatory\s+│\s+1\s+│", rendered)
+    assert re.search(r"Review Required\s+│\s+0\s+│", rendered)
+    assert re.search(r"Regular Control\s+│\s+1\s+│", rendered)
+    assert re.search(r"Total\s+│\s+2\s+│", rendered)
+    assert Counter(row["proposal"] for row in _read_csv(output)) == {
+        "Candidate Mandatory": 1,
+        "Regular Control": 1,
+    }
+    assert (tmp_path / "scoped-shadow-comparison.csv").exists()
+    assert not (tmp_path / "mandatory-shadow-comparison.csv").exists()
 
 
 def test_shadow_reports_normative_promotion_demotion_and_confidence_difference() -> None:

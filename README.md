@@ -83,8 +83,6 @@ Validated Windows Server L1 regression reference:
 - **5 Review Required**
 - **275 Regular Control**
 
-These values are regression results, not classification quotas.
-
 See [Mandatory Control Engine — Phase 1](docs/mandatory-control-phase1.md).
 
 ### Security Knowledge

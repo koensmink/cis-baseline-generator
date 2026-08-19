@@ -158,6 +158,7 @@ def build_assessment(
     return MandatoryAssessment(
         control_id=control.control_id,
         source_identity=source_identity_for_control(control),
+        title=control.title,
         proposal=proposal,
         control_family=family,
         mandatory_criteria=criteria,

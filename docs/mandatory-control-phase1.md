@@ -62,5 +62,23 @@ neither may replace deterministic evidence or human approval.
 cis-mandatory-analyze controls.jsonl -o mandatory-review.csv
 ```
 
-This writes the full CSV, `mandatory-review-candidate-mandatory.csv`,
-`mandatory-review-review-required.csv`, and `mandatory-review-summary.json`.
+This prints a production classification summary and writes the full assessment
+CSV plus two direct review queues:
+
+- `mandatory-review.csv` (all assessments)
+- `mandatory-review-candidate-mandatory.csv` (Candidate Mandatory only)
+- `mandatory-review-review-required.csv` (Review Required only)
+
+All three CSVs carry the same human-reviewable source, criterion, boundary,
+attack-path, rationale, confidence, and finding columns where those values are
+available. `mandatory-review-summary.json` and attack-path coverage output are
+also retained.
+
+Use advisory normative comparison explicitly:
+
+```bash
+cis-mandatory-analyze controls.jsonl -o mandatory-review.csv --shadow-normative
+```
+
+Its stem-isolated `mandatory-review-shadow-*` files are advisory and do not
+change or replace production classifications, counts, or review queues.

@@ -6,8 +6,51 @@ from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
 
+from .criteria import criterion_label
 from .schema import MandatoryAssessment
 from .shadow import ShadowMandatoryAssessment
+
+ASSESSMENT_CSV_FIELDNAMES = [
+    "source_framework",
+    "benchmark_family",
+    "benchmark_name",
+    "benchmark_version",
+    "profile",
+    "source_identity",
+    "control_id",
+    "title",
+    "proposal",
+    "confidence",
+    "mandatory_criteria",
+    "mandatory_criterion_labels",
+    "boundary_set_id",
+    "boundary_set_name",
+    "boundary_set_role",
+    "attack_path_ids",
+    "non_compensable_reason",
+    "review_note",
+    "exclusion_reasons",
+    *[
+        name
+        for name in MandatoryAssessment.model_fields
+        if name
+        not in {
+            "source_identity",
+            "control_id",
+            "title",
+            "proposal",
+            "confidence",
+            "mandatory_criteria",
+            "boundary_set_id",
+            "boundary_set_name",
+            "boundary_set_role",
+            "attack_path_ids",
+            "non_compensable_reason",
+            "review_note",
+            "exclusion_reasons",
+        }
+    ],
+]
 
 
 def _row(assessment: MandatoryAssessment) -> dict[str, object]:
@@ -20,8 +63,14 @@ def _row(assessment: MandatoryAssessment) -> dict[str, object]:
     data["benchmark_version"] = identity.benchmark_version if identity else ""
     data["profile"] = identity.benchmark_profile if identity else ""
     data["mandatory_criteria"] = ";".join(assessment.mandatory_criteria)
+    data["mandatory_criterion_labels"] = ";".join(
+        criterion_label(code) for code in assessment.mandatory_criteria
+    )
     data["exclusion_reasons"] = ";".join(assessment.exclusion_reasons)
     data["related_control_ids"] = ";".join(assessment.related_control_ids)
+    data["related_core_member_ids"] = ";".join(
+        assessment.related_core_member_ids
+    )
     data["capability_ids"] = ";".join(assessment.capability_ids)
     data["attack_path_ids"] = ";".join(assessment.attack_path_ids)
     data["attack_path_names"] = ";".join(assessment.attack_path_names)
@@ -40,16 +89,12 @@ def _row(assessment: MandatoryAssessment) -> dict[str, object]:
 
 def write_assessment_csv(assessments: Iterable[MandatoryAssessment], path: Path) -> None:
     rows = [_row(item) for item in assessments]
-    fieldnames = [
-        *MandatoryAssessment.model_fields,
-        "source_framework",
-        "benchmark_family",
-        "benchmark_name",
-        "benchmark_version",
-        "profile",
-    ]
     with path.open("w", newline="", encoding="utf-8-sig") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames, quoting=csv.QUOTE_ALL)
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=ASSESSMENT_CSV_FIELDNAMES,
+            quoting=csv.QUOTE_ALL,
+        )
         writer.writeheader()
         writer.writerows(rows)
 

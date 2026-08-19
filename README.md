@@ -6,7 +6,7 @@
 
 A deterministic toolkit for parsing CIS Benchmarks, evaluating Mandatory control candidates, enriching controls with reusable Security Knowledge, comparing benchmark versions, and optionally mapping supported controls to Microsoft Intune.
 
-> **CIS benchmark content is not included.** Obtain benchmark documents separately and comply with the CIS Terms of Use.
+> **CIS benchmark content is not included.** Obtain benchmark documents separately and comply with the CIS Terms of Use. 
 
 ## What it does
 
@@ -151,3 +151,7 @@ For parser-specific compatibility and failure behavior, see [CIS Benchmark Parse
 Source code is licensed under the [MIT License](LICENSE).
 
 CIS benchmark content is not distributed with this repository and remains subject to CIS terms.
+
+## Disclaimer 
+
+This project is an independent, community-developed tool and is not affiliated with, endorsed by, or sponsored by the Center for Internet Security (CIS). CIS Benchmarks® and related trademarks are the property of the Center for Internet Security.

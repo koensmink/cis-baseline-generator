@@ -106,17 +106,15 @@ Low
 
 ### Reason
 
-The tool processes only **public CIS benchmark documents**.
+The tool processes user-supplied benchmark documents and generated analysis
+artifacts. Those inputs may be licensed or operationally sensitive and should
+be handled according to the user's access and retention policy.
 
-No:
-
--   credentials
--   API keys
--   external services
-
-are used.
-
-The tool operates fully offline.
+The deterministic parser, Mandatory engine, Security Knowledge engine, and
+rule-pack mapping paths operate locally. The optional `--llm-fallback` Intune
+suggestion path can use the OpenAI API and an API key; it is opt-in, advisory,
+and outside authoritative classification. Do not enable it for content that is
+not approved for external processing.
 
 ------------------------------------------------------------------------
 

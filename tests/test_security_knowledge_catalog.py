@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -40,6 +41,7 @@ def finding_codes(catalog: SecurityKnowledgeCatalog) -> set[str]:
 
 def test_authoritative_catalog_builds_with_zero_errors() -> None:
     catalog = build_catalog()
+    assert catalog.catalog_version == catalog.provenance.catalog_version == "1.2.0"
     assert catalog.validate() == ()
     assert (len(catalog.capabilities), len(catalog.boundary_definitions), len(catalog.boundary_set_definitions)) == (10, 27, 23)
     assert (len(catalog.threat_scenarios), len(catalog.attack_techniques), len(catalog.attack_paths), len(catalog.security_outcomes)) == (32, 21, 26, 14)
@@ -73,6 +75,8 @@ def test_catalog_serialization_is_deterministic_and_round_trips() -> None:
     second = build_catalog().to_deterministic_json()
     assert first == second
     assert json.loads(first)["validation_summary"] == {"errors": 0, "warnings": 0}
+    publication = Path(__file__).parents[1] / "security-knowledge-catalog.json"
+    assert publication.read_text(encoding="utf-8") == first
 
 
 def test_duplicate_identifiers_are_rejected() -> None:

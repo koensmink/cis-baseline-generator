@@ -66,6 +66,17 @@ class BenchmarkIdentity:
     finding: str | None = None
 
 
+class UnsupportedBenchmarkIdentityError(ValueError):
+    """Raised when parser input cannot be assigned one supported family."""
+
+    def __init__(self, identity: BenchmarkIdentity) -> None:
+        self.identity = identity
+        super().__init__(
+            f"{identity.finding or 'BENCHMARK_FAMILY_UNSUPPORTED'}: "
+            "PDF benchmark identity is unsupported or ambiguous"
+        )
+
+
 def detect_benchmark_identity(lines: list[str]) -> BenchmarkIdentity:
     """Detect a supported family from benchmark-title evidence."""
     evidence = " ".join(" ".join(line.split()) for line in lines[:50])
@@ -248,6 +259,8 @@ def extract_benchmark_meta(pdf_path: str) -> tuple[str, str, str]:
     lines = [l.strip() for l in text.splitlines() if l.strip()]
 
     identity = detect_benchmark_identity(lines)
+    if identity.finding is not None:
+        raise UnsupportedBenchmarkIdentityError(identity)
     name = identity.benchmark_name
     version = ""
     date = ""

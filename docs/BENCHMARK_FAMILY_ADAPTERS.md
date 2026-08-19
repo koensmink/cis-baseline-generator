@@ -16,6 +16,9 @@ non-compensability, resolved applicability, evidence, and confidence.
 Parser identity detection uses benchmark-title evidence from source metadata.
 It does not infer family from filenames. Missing evidence produces `unknown`;
 conflicting supported titles produce `ambiguous`.
+At parser entry, either condition is a controlled failure. Adapter-level
+processing of pre-existing structured records retains explicit findings and
+never falls back to Windows.
 
 ## Adapter selection
 
@@ -78,6 +81,10 @@ Defender, UAC, host-profile, and host applicability rules. Generic
 orchestration invokes those rules only for the Windows Server adapter. An
 explicit Microsoft 365 control cannot receive a Windows host boundary merely
 because similar words appear in its title.
+
+The downstream Intune rule pack currently supports only Windows Server.
+Microsoft 365, unknown, ambiguous, and other unsupported families receive
+explicit manual-review output with `UNSUPPORTED_BENCHMARK_FAMILY`.
 
 ## Adding a family
 

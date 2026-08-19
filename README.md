@@ -58,6 +58,7 @@ Detailed design documentation:
 - [Security Knowledge Model](docs/SECURITY_KNOWLEDGE_MODEL.md)
 - [Security Knowledge Catalog](docs/SECURITY_KNOWLEDGE_CATALOG.md)
 - [Security Knowledge Model implementation](docs/SECURITY_KNOWLEDGE_MODEL_IMPLEMENTATION.md)
+- [v1 release candidate notes](docs/V1_RELEASE_NOTES.md)
 - [Security Knowledge — Phase 1](docs/security-knowledge-phase1.md)
 - [Intune mapping flow](docs/mapping_flow.svg), [policy generation](docs/policy_generation.svg), and [coverage lifecycle](docs/coverage_lifecycle.svg)
 
@@ -69,7 +70,11 @@ The parser converts a supported CIS Benchmark PDF layout into `ControlRecord` ob
 
 Extracted data includes benchmark name/version/date; control ID, profile, title, assessment type, and applicability; description, rationale, impact, audit, remediation, default value, and references. Page ranges, the source PDF SHA-256, the extracted block SHA-256, parser version, and extraction timestamp preserve source traceability.
 
-The current parser recognizes the CIS Microsoft Windows Server benchmark header and recommendation-section vocabulary implemented in `parser.py`. It should not be assumed to support an unrelated benchmark layout merely because the knowledge model is technology-independent.
+The current parser recognizes Microsoft Windows Server and Microsoft 365
+Foundations benchmark identity headers plus the recommendation-section
+vocabulary implemented in `parser.py`. Unsupported or ambiguous identity is a
+controlled error; it never defaults to Windows Server. A recognized identity
+does not by itself guarantee compatibility with every historical PDF layout.
 
 ### Mandatory Control Engine
 
@@ -107,14 +112,28 @@ The authoritative catalog is reusable and source-independent. Its current determ
 | Object | Count |
 |---|---:|
 | Security Capabilities | 10 |
-| Boundary definitions | 13 |
-| Boundary-set definitions | 9 |
-| Threat Scenarios | 18 |
-| Attack Techniques | 12 |
-| Attack Paths | 13 |
+| Boundary definitions | 27 |
+| Boundary-set definitions | 23 |
+| Threat Scenarios | 32 |
+| Attack Techniques | 21 |
+| Attack Paths | 26 |
 | Security Outcomes | 14 |
 
 Catalog validation must produce **zero errors** before the catalog is treated as authoritative. Stable IDs, lifecycle state, provenance, active references, external mappings, and legacy migration coverage are validated. The committed `security-knowledge-catalog.json` is a byte-stable deterministic export; there is currently no dedicated catalog CLI entry point.
+
+The release-candidate catalog version is **1.2.0**. Runtime builds it from the
+Python catalog definitions; the root JSON file is the deterministic publication
+artifact and is not required at runtime after wheel installation.
+
+### Normative shadow evaluation
+
+Advisory shadow mode is implemented behind `cis-mandatory-analyze
+--shadow-normative`. It evaluates catalog mappings and benchmark-scoped
+boundaries in parallel with the unchanged production Mandatory classifier.
+Shadow results never override production classifications and do not authorize a
+classifier cutover. Microsoft 365 identity/authentication and application,
+consent, service-principal, and workload-identity slices remain advisory and
+route incomplete knowledge to Review Required.
 
 See the [catalog specification](docs/SECURITY_KNOWLEDGE_CATALOG.md) and [relationship diagram](docs/security_knowledge_catalog.svg).
 
@@ -129,6 +148,10 @@ The Intune mapper is a downstream implementation engine for applicable parsed co
 - `suggested_mappings.jsonl`.
 
 Current rule packs cover account policies, audit policy, security options, Defender, firewall, credential protection, event log, and remote access for the `windows_server_2025` target. These mappings are not a claim that every benchmark recommendation has an Intune implementation.
+
+Microsoft 365 and unknown, ambiguous, or unsupported benchmark families do not
+run Windows rules. They produce explicit `UNSUPPORTED_BENCHMARK_FAMILY`
+manual-review output. Microsoft 365 Intune mapping is not supported in v1.
 
 When `--llm-fallback` is requested, only `manual_review` mappings are submitted for suggestions. Output is a proposal requiring validation and has no authority over parser facts, Mandatory classification, Security Knowledge resolution, or deterministic Intune rules.
 
@@ -560,9 +583,10 @@ These scopes are deliberately distinct:
 
 | Area | Current scope |
 |---|---|
-| Parser-supported layouts | CIS Microsoft Windows Server benchmark headers and section patterns recognized by the current parser. Other layouts require validation and parser work. |
+| Parser-supported identities | Microsoft Windows Server and Microsoft 365 Foundations headers. Supported identity does not imply every PDF layout is validated. Unsupported or ambiguous identities fail explicitly. |
 | Mandatory validated reference | The Windows Server L1 regression fixture (307 controls) validates classification parity. Phase 1 boundary knowledge covers host firewall, SMB, LDAP, NTLM, WinRM, RDP, malware protection, and privileged credential/execution families. |
-| Intune mapping | Modular deterministic rule packs targeting `windows_server_2025`; unmatched or ambiguous controls remain manual review. |
+| M365 advisory reference | Identity/authentication plus application registration, consent, service-principal authorization, and workload-identity trust are evaluated only in normative shadow mode. Incomplete domains remain Review Required. |
+| Intune mapping | Modular deterministic rule packs target `windows_server_2025`. M365 and unsupported families receive explicit manual-review output and never run Windows rules. |
 | Future technology architecture | Catalog concepts are technology- and source-independent, but that architectural property does not itself make Linux, macOS, cloud, container, or other benchmark families supported. |
 
 ## Roadmap
@@ -576,20 +600,22 @@ These scopes are deliberately distinct:
 - normative Security Knowledge Model;
 - authoritative deterministic catalog;
 - threat-scenario and attack-path enrichment; and
-- downstream Intune mapping.
+- advisory normative shadow mode;
+- Windows Server and selected M365 family adapters; and
+- downstream Windows Server Intune mapping.
 
 ### Next phases
 
-- normative classifier shadow mode;
 - classifier cutover only after validation;
-- cross-benchmark Security Knowledge mappings;
-- controlled MITRE ATT&CK enrichment;
+- additional benchmark-family knowledge;
 - later CWE/CVE enrichment;
-- optional AI analyst and independent reviewer roles; and
+- AI-based authoritative decisions, persistence, API, and UI; and
 - broader benchmark families after parser and mapping validation.
 
 Planned items are not implemented capabilities and do not imply current benchmark support.
 
 ## License and Content
 
-The source code is licensed under the MIT License. CIS benchmark content is not distributed with this repository and remains subject to CIS terms.
+The source code is licensed under the [MIT License](LICENSE). CIS benchmark
+content is not distributed with this repository and remains subject to CIS
+terms.

@@ -17,7 +17,9 @@ source-independent knowledge layer for:
 - coverage analysis; and
 - future mappings to other security baselines.
 
-The current implementation begins with CIS Windows Server recommendations. The
+The current implementation has validated Windows Server reference behavior and
+secondary advisory Microsoft 365 identity/authentication and
+application/workload-identity slices. The
 ontology itself MUST NOT be Windows-specific, CIS-specific, product-specific, or
 tied to one parser. Windows Server names belong in source records, technology
 scopes, boundary instances, and mapping rules—not in the definitions of generic
@@ -885,12 +887,9 @@ normative.
 | Decision provenance | decision and evaluated object/rule/catalog versions | All evaluated mapping, BoundaryEvaluation, rule, catalog, and ontology revisions are recorded | Decision invalid and cannot be published |
 | Coverage distinction | coverage state and BoundaryEvaluation facts | Exactly one section 17 state is emitted; no-effective and incomplete are distinct; complete complementary set is effective | Coverage output invalid |
 
-The current implementation does not yet have ThreatScenario objects. AP-007 also
-has no technique enrichment. Under the authoritative invariant, AP-007 and the
-other current paths cannot be treated as active Candidate-supporting paths until
-at least one active ThreatScenario is added to each. This is a migration
-requirement, not permission to invent source facts or silently grandfather the
-missing relationship.
+The current catalog implements active ThreatScenario objects and requires every
+active AttackPath to resolve active scenario and outcome references. Catalog
+validation blocks unresolved or inactive relationships.
 
 ## 20. Non-goals
 
@@ -938,23 +937,23 @@ authority.
       thresholds.
 - [x] Define typed evidence, provenance types, lifecycle-reference rules, and
       executable invariant outcomes.
-- [ ] Define first-class Pydantic models for Boundary, Boundary Set, Threat
+- [x] Define first-class Pydantic models for Boundary, Boundary Set, Threat
       Scenario, Attack Technique, Security Outcome, Risk Explanation, Mapping
       Provenance, BoundaryEvaluation, CompensatingControlEvaluation, and
       Mandatory Decision revision.
-- [ ] Assign active lifecycle status and catalog versions to current capability
+- [x] Assign active lifecycle status and catalog versions to current capability
       and attack-path objects.
-- [ ] Give each current `BS-*` object an explicit related `BND-*` boundary and
+- [x] Give each current `BS-*` object an explicit related `BND-*` boundary and
       migrate it to a BoundarySetDefinition.
-- [ ] Define at least one active ThreatScenario for every active attack path,
+- [x] Define at least one active ThreatScenario for every active attack path,
       including AP-007; techniques remain optional enrichments.
-- [ ] Scope Source Recommendation identity beyond bare `control_id`.
-- [ ] Implement typed evidence and the five provenance schemas.
+- [x] Scope Source Recommendation identity beyond bare `control_id`.
+- [x] Implement typed evidence and the five provenance schemas.
 - [ ] Encode the normative High-confidence Candidate matrix.
 - [ ] Version deterministic mapping rules and ontology output.
-- [ ] Implement all six normative coverage states.
-- [ ] Add schema validation for all invariants in section 19.
-- [ ] Define migration and compatibility fixtures before changing exports.
+- [x] Implement all six normative coverage states.
+- [x] Add schema validation for implemented catalog and mapping invariants.
+- [x] Define migration and compatibility fixtures before changing exports.
 
 ## Open design decisions
 
@@ -983,85 +982,21 @@ authority.
    Until resolved, a bounded attributable narrative is required and must name
    the remaining entry condition, open step, and outcome.
 
-## Migration impact on the current `security_knowledge` module
+## Current implementation and remaining migration boundary
 
-The present module is a valid Phase 1 implementation subset, but it does not yet
-implement the full authoritative model:
+The runtime now implements versioned catalog objects, active scenarios and
+paths, atomic mitigation mappings, typed evidence and provenance, composite
+source identity, separate `BND-*` and `BS-*` objects, benchmark-scoped boundary
+evaluation, structured validation findings, and the six qualitative coverage
+states. Backward-compatible flattened fields remain on `MandatoryAssessment`
+and legacy exports.
 
-- `SecurityCapability` currently has only ID, name, and description; it lacks
-  objective, examples, exclusions, lifecycle, and catalog version.
-- `AttackPath` currently has stages, assets, outcomes as text, and optional MITRE
-  IDs, but lacks entry/intermediate conditions, goals, linked threat scenarios,
-  internal techniques, boundaries, mitigation links, residual path, lifecycle,
-  and independent confidence.
-- `ControlAttackPathMapping` lacks mapping ID, source scope, boundary ID, threat
-  and technique links, omitted path, compensating controls, non-compensability,
-  applicability, method, rule version, ontology version, and review lineage.
-- `ControlAttackPathMapping` is currently atomic for attack path and capability,
-  but does not carry the new singular source identity, boundary-role enum,
-  BoundaryDefinition/BoundarySetDefinition distinction, or typed evidence IDs.
-- Boundary definitions currently live in the Mandatory module as `BS-*`
-  structures. Boundary and boundary-set semantics are combined, and there are no
-  first-class `BND-*` objects.
-- Threat Scenario, internal Attack Technique, Security Outcome, qualitative Risk,
-  and versioned Mandatory Decision are not first-class models.
-- Current enrichment stores flattened mapping aggregates directly on
-  `MandatoryAssessment`. Those fields should remain backward compatible while
-  canonical mapping objects become the source of aggregate exports.
-- Current confidence may inherit assessment confidence or become High from
-  boundary recognition and evidence count. It is not yet independently derived
-  for every semantic layer and therefore does not satisfy the normative
-  Candidate confidence matrix.
-- Current source lookup is keyed by bare `control_id`; canonical identity must be
-  benchmark-scoped before multi-source ingestion is safe.
-- Current coverage marks a boundary/path incomplete when any mapped assessment
-  is Review Required. It does not yet evaluate explicit prerequisites, required
-  effects, selected alternatives, accepted compensation, residual paths, or the
-  six normative coverage states. Its “no primary mitigation” output must not be
-  interpreted as a preventive gap when a complementary core set is complete.
-- The current `boundary_set_role` export uses `standalone` and `core member`,
-  while the relationship model uses the fuller normative role names. A migration
-  must define one canonical enum and backward-compatible serialization.
-- The current `attack_path_if_omitted` field is a narrative on boundary
-  membership, not a structured residual attack-path reference.
-- Current attack paths have no ThreatScenario references. Under section 19 they
-  cannot yet be active Candidate-supporting catalog objects; migration must add
-  curated scenarios before enforcing the new invariant against existing output.
-- Current exports do not distinguish applicability mode from deployment state or
-  benchmark scope from environment scope.
-- Current provenance is embedded in source records and evidence excerpts rather
-  than represented by the five normative provenance types.
-
-Migration MUST be additive first: introduce versioned canonical objects and
-links, populate them from existing deterministic rules, preserve current export
-columns, compare old and new decisions, and only then deprecate flattened or
-ambiguous fields.
-
-## Recommended next implementation phase
-
-The next phase should implement the minimum ontology foundation, not storage or
-AI integration:
-
-1. Add versioned Pydantic schemas for BoundaryDefinition,
-   BoundarySetDefinition, BoundaryEvaluation, ThreatScenario, AttackTechnique,
-   SecurityOutcome, typed evidence, the five provenance types,
-   CompensatingControlEvaluation, and MandatoryDecision revision.
-2. Convert the eight current Windows Server boundary families into catalog data
-   with separate `BND-*` and `BS-*` identities.
-3. Define at least one active threat scenario for every current attack path;
-   resolve AP-007 first. Technique mappings are optional enrichments.
-4. Replace bare control-ID joins with benchmark-scoped source identity.
-5. Produce atomic, versioned mitigation mappings with independent boundary role,
-   mitigation role, and strength while retaining existing aggregate fields and
-   CSV columns.
-6. Implement the executable validation invariants, applicability/deployment
-   matrix, and six qualitative coverage states.
-7. Run a decision-parity migration against the current Windows Server fixture
-   and require explicit review for every changed Candidate Mandatory result.
-
-AI analyst, independent reviewer, persistence, APIs, and customer overlays
-should follow only after this deterministic ontology foundation and its
-migration behavior are stable.
+The production Mandatory classifier has deliberately not been replaced. The
+normative path runs only in advisory shadow mode, and incomplete applicability,
+knowledge, confidence, alternatives, or compensation remains Review Required.
+Any classifier cutover requires a separate reviewed change with decision parity
+and explicit adjudication of every difference. AI-based authority, persistence,
+APIs, UIs, graph storage, and customer-specific overlays remain outside v1.
 
 ## Review-resolution table
 

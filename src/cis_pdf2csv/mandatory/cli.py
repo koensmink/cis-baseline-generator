@@ -38,8 +38,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     output = Path(args.output)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    records = _load_jsonl(Path(args.input))
+    input_path = Path(args.input)
+    if not input_path.is_file():
+        parser.error(f"input file not found: {input_path}")
+    if not output.parent.exists():
+        parser.error(f"output directory does not exist: {output.parent}")
+    try:
+        records = _load_jsonl(input_path)
+    except (OSError, ValueError) as exc:
+        parser.error(str(exc))
     shadow_result = assess_controls_shadow(records) if args.shadow_normative else None
     assessments = list(shadow_result.legacy_assessments) if shadow_result else assess_controls(records)
     write_assessment_csv(assessments, output)
@@ -57,7 +64,11 @@ def main(argv: list[str] | None = None) -> int:
         output.with_name(f"{output.stem}-attack-path-coverage.json"),
     )
     if shadow_result:
-        write_shadow_comparison(shadow_result.shadow_assessments, output.parent)
+        write_shadow_comparison(
+            shadow_result.shadow_assessments,
+            output.parent,
+            output.stem,
+        )
     return 0
 
 

@@ -14,7 +14,7 @@ from .threat_scenarios import THREAT_SCENARIOS
 def build_catalog() -> SecurityKnowledgeCatalog:
     return SecurityKnowledgeCatalog(
         catalog_id="SKC-CORE",
-        catalog_version="1.1.0",
+        catalog_version="1.2.0",
         ontology_version="1.0.0",
         lifecycle_status="active",
         capabilities=CAPABILITIES,

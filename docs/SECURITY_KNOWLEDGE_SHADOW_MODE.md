@@ -2,7 +2,7 @@
 
 ## Purpose and status
 
-Shadow mode measures a future catalog-based Mandatory decision pipeline against
+Shadow mode measures the implemented catalog-based advisory pipeline against
 the existing deterministic classifier. It is an explicitly enabled,
 deterministic validation facility. Every normative decision is **advisory**. It
 does not override, filter, promote, demote, or otherwise alter the production
@@ -80,11 +80,12 @@ exports are additional operational requirements.
 
 ## Outputs
 
-With shadow mode enabled, the normal legacy files are written as before, plus:
+With shadow mode enabled, the normal legacy files are written as before. If the
+requested output is `<stem>.csv`, it additionally writes:
 
-- `mandatory-shadow-comparison.csv`;
-- `mandatory-shadow-comparison.json`; and
-- `mandatory-shadow-summary.json`.
+- `<stem>-shadow-comparison.csv`;
+- `<stem>-shadow-comparison.json`; and
+- `<stem>-shadow-summary.json`.
 
 The summary separates missing mappings into qualifying effects lacking catalog
 coverage, optional enrichment for non-Mandatory effects, detection-oriented
@@ -120,6 +121,9 @@ shadow files.
 - Shadow evidence reuses deterministic classifier evidence and compatibility
   migrations; it does not ingest new source material.
 - Cutover metrics are evidence for a later phase, not authorization to cut over.
+- Microsoft 365 identity/authentication and application/workload-identity
+  knowledge is a secondary advisory reference scope. Mail, DLP, and sharing
+  knowledge is incomplete and cannot support production decisions.
 
 ## Future cutover acceptance criteria
 

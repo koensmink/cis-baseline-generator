@@ -6,13 +6,14 @@ import importlib
 import inspect
 import json
 import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, List
+from typing import Any
 
 from rich.console import Console
 from rich.table import Table
 
-from .parser import parse_controls
+from .parser import UnsupportedBenchmarkIdentityError, parse_controls
 from .schema import ControlRecord
 
 console = Console()
@@ -41,7 +42,7 @@ def _clean_csv_value(v):
     return v.strip()
 
 
-def _write_csv(records: List[ControlRecord], out_path: Path) -> None:
+def _write_csv(records: list[ControlRecord], out_path: Path) -> None:
     fieldnames = list(ControlRecord.model_fields.keys())
     with out_path.open("w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(
@@ -56,13 +57,13 @@ def _write_csv(records: List[ControlRecord], out_path: Path) -> None:
             writer.writerow(row)
 
 
-def _write_jsonl(records: List[ControlRecord], out_path: Path) -> None:
+def _write_jsonl(records: list[ControlRecord], out_path: Path) -> None:
     with out_path.open("w", encoding="utf-8") as f:
         for r in records:
             f.write(json.dumps(r.model_dump(), ensure_ascii=False) + "\n")
 
 
-def _all_have_suffix(paths: List[str], suffix: str) -> bool:
+def _all_have_suffix(paths: list[str], suffix: str) -> bool:
     return all(Path(p).suffix.lower() == suffix.lower() for p in paths)
 
 
@@ -96,7 +97,7 @@ def _resolve_intune_mapper() -> tuple[str, Callable[..., Any]] | None:
     for module_name in module_candidates:
         try:
             module = importlib.import_module(module_name, package=__package__)
-        except Exception:
+        except ImportError:
             continue
 
         for fn_name in function_candidates:
@@ -183,12 +184,9 @@ def _run_intune_mapper(input_path: Path, output_path: Path, llm_fallback: bool) 
             f"[red]Resolved mapper entrypoint could not be called with the expected arguments:[/red] {e}"
         )
         return 2
-    except Exception as e:
-        console.print(f"[red]Intune mapper execution failed:[/red] {e}")
-        return 1
 
 
-def main(argv: List[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="cis-pdf2csv",
         description="Parse CIS Benchmark PDF(s) into CSV/JSONL or pass JSONL into an intune mapper",
@@ -225,6 +223,14 @@ def main(argv: List[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     out_path = Path(args.output)
+    input_paths = [Path(value) for value in args.pdfs]
+    missing = [str(path) for path in input_paths if not path.is_file()]
+    if missing:
+        console.print(f"[red]Input file not found:[/red] {missing[0]}")
+        return 2
+    if not out_path.parent.exists():
+        console.print(f"[red]Output directory does not exist:[/red] {out_path.parent}")
+        return 2
 
     # Mode 1: JSONL -> intune mapper
     if len(args.pdfs) == 1 and Path(args.pdfs[0]).suffix.lower() == ".jsonl":
@@ -248,11 +254,15 @@ def main(argv: List[str] | None = None) -> int:
         console.print(f"[red]Unsupported output format[/red]: {out_fmt}")
         return 2
 
-    all_records: List[ControlRecord] = []
-    for pdf in args.pdfs:
-        controls = parse_controls(pdf, profile_filter=args.profile)
-        for c in controls:
-            all_records.append(ControlRecord(**c))
+    all_records: list[ControlRecord] = []
+    try:
+        for pdf in args.pdfs:
+            controls = parse_controls(pdf, profile_filter=args.profile)
+            for c in controls:
+                all_records.append(ControlRecord(**c))
+    except UnsupportedBenchmarkIdentityError as exc:
+        console.print(f"[red]{exc}[/red]")
+        return 2
 
     # Deterministic order: by benchmark then control_id
     all_records.sort(key=lambda r: (r.benchmark_name, r.benchmark_version, r.control_id))
@@ -268,7 +278,7 @@ def main(argv: List[str] | None = None) -> int:
     t.add_column("Controls", justify="right")
     t.add_column("Profile", justify="left")
     t.add_row(
-        str(len(set((r.benchmark_name, r.benchmark_version) for r in all_records))),
+        str(len({(r.benchmark_name, r.benchmark_version) for r in all_records})),
         str(len(all_records)),
         str(args.profile or "ALL"),
     )

@@ -99,26 +99,24 @@ mapping.
 ## Known gaps
 
 - The existing Mandatory runtime still exports the deprecated Phase-1 mapping
-  shape; migration is intentionally adapter-based.
-- Existing benchmark-specific `BS-*` definitions have not yet been converted to
-  a complete standalone normative boundary catalog.
-- The initial ThreatScenario entries are curated generic catalog scenarios. They
-  require normal catalog governance before production lifecycle promotion.
+  shape for compatibility; normative atomic mappings are exported by advisory
+  shadow mode.
+- Catalog coverage is validated for the Windows reference and selected M365
+  identity/application slices, not every benchmark domain.
 - Medium and Low confidence meanings remain descriptive; they cannot satisfy a
   Candidate Mandatory decision.
 - Formal condition-expression syntax and structured residual-path steps remain
   future model work. Unresolved conditions require review.
 - No customer-specific Risk objects are created by generic benchmark analysis.
 
-## Migration path from Phase 1
+## Remaining path from advisory shadow
 
 1. Continue producing current Mandatory outputs unchanged.
-2. Run the compatibility adapter and retain all structured findings.
-3. Establish active BoundaryDefinition and BoundarySetDefinition catalog
-   objects for each existing boundary family.
-4. Review the curated ThreatScenario catalog and version its provenance.
-5. Compare adapted mappings and decisions against existing regression output.
-6. Route missing or low-confidence knowledge to Review Required.
-7. Adopt normative mappings as the canonical export source only after decision
+2. Run the implemented compatibility and family adapters and retain all
+   structured findings.
+3. Version catalog provenance and regenerate the deterministic publication
+   artifact for every content change.
+4. Compare shadow mappings and decisions against existing regression output.
+5. Route missing, incomplete, or low-confidence knowledge to Review Required.
+6. Adopt normative mappings as the canonical decision source only after decision
    parity and explicit review of every deviation.
-

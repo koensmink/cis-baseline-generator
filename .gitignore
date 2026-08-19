@@ -1,0 +1,28 @@
+.DS_Store
+.venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Local benchmark inputs and parser output
+*.pdf
+*.jsonl
+*.csv
+
+# Generated analysis and mapping artifacts
+intune_out/
+output/
+outputs/
+tmp/
+temp/
+*-summary.json
+*-comparison.json
+*-coverage.json
+llm_cache.json
+report.md
+report_full.md

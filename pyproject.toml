@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cis-pdf2csv"
-version = "1.0.0"
+version = "1.0.1"
 description = "Deterministic CIS benchmark parsing, security knowledge analysis, and Windows Intune mapping"
 requires-python = ">=3.10"
 license = "MIT"

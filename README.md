@@ -264,6 +264,28 @@ mandatory-review-summary.json
 mandatory-review-attack-path-coverage.json
 ```
 
+After a successful run, a Rich table reports the production counts for
+Candidate Mandatory, Review Required, Regular Control, and Total, followed by
+the paths to the three primary review artifacts:
+
+- `mandatory-review.csv` — every production assessment;
+- `mandatory-review-candidate-mandatory.csv` — the Candidate Mandatory queue;
+- `mandatory-review-review-required.csv` — the Review Required queue.
+
+The CSVs include benchmark-scoped source identity and title, proposal and
+confidence, matched criteria, boundary and attack-path context,
+non-compensability rationale, and review findings where available.
+
+Optional normative comparison remains advisory:
+
+```bash
+cis-mandatory-analyze controls.jsonl -o mandatory-review.csv --shadow-normative
+```
+
+Shadow files retain the output stem (for example,
+`mandatory-review-shadow-comparison.csv`) and are identified as advisory; they
+do not alter the production summary or production CSVs.
+
 The Mandatory engine consumes parser-produced `ControlRecord` JSONL. It does not modify the source JSONL.
 
 See:

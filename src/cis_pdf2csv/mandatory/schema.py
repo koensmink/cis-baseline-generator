@@ -32,6 +32,7 @@ class BenchmarkEvidence(BaseModel):
 class MandatoryAssessment(BaseModel):
     control_id: str
     source_identity: SourceIdentity | None = None
+    title: str | None = None
     proposal: Proposal
     control_family: str
     mandatory_criteria: list[str] = Field(default_factory=list)

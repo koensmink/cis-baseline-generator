@@ -168,39 +168,6 @@ For parser-specific compatibility and failure behavior, see [CIS Benchmark Parse
 | [Security Knowledge Model Implementation](docs/SECURITY_KNOWLEDGE_MODEL_IMPLEMENTATION.md) | Implementation details |
 | [v1 Release Notes](docs/V1_RELEASE_NOTES.md) | Release-specific notes |
 
-## Repository Structure
-
-```text
-src/cis_pdf2csv/
-├── cli.py, parser.py, schema.py
-├── diff.py
-├── mandatory/
-├── security_knowledge/
-└── intune_mapper/
-
-docs/
-├── CLI_USAGE.md
-├── CIS_BENCHMARK_PARSER.md
-├── mandatory-control-phase1.md
-├── SECURITY_KNOWLEDGE_MODEL.md
-├── SECURITY_KNOWLEDGE_CATALOG.md
-└── architecture diagrams
-```
-
-## Roadmap
-
-Current implementation includes:
-
-- CIS PDF parsing and structured exports;
-- benchmark diff;
-- deterministic Mandatory analysis;
-- Security Knowledge modeling and catalog resolution;
-- attack-path and boundary coverage;
-- advisory normative shadow evaluation; and
-- downstream Windows Server Intune mapping.
-
-Planned capabilities must not be interpreted as implemented benchmark support.
-
 ## License and CIS Content
 
 Source code is licensed under the [MIT License](LICENSE).

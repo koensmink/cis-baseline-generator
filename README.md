@@ -152,4 +152,4 @@ CIS benchmark content is not distributed with this repository and remains subjec
 
 ## Disclaimer 
 
-This project is an independent, community-developed tool and is not affiliated with, endorsed by, or sponsored by the Center for Internet Security (CIS). CIS Benchmarks® and related trademarks are the property of the Center for Internet Security.
+CIS Benchmarks™ is a trademark of the Center for Internet Security, Inc. (CIS). This project is an independent open-source project and is not affiliated with, sponsored by, or endorsed by CIS. CIS Benchmark content is not distributed with this software.

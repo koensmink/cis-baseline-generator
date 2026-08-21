@@ -32,6 +32,7 @@ from cis_pdf2csv.security_knowledge.identifiers import (
     OutcomeId,
     RiskId,
     TechniqueId,
+    ThreatContextId,
     ThreatScenarioId,
     validate_identifier,
 )
@@ -238,6 +239,7 @@ def catalog(boundary_object: BoundaryDefinition | None = None) -> KnowledgeCatal
         (RiskId, "RISK-001"),
         (MappingId, "MAP-001"),
         (MandatoryDecisionId, "MD-001"),
+        (ThreatContextId, "THRCTX-INVENTED-001"),
     ],
 )
 def test_every_identifier_grammar(identifier_type: Any, valid: str) -> None:

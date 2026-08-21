@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from hashlib import sha256
 from typing import Annotated, TypeAlias
 
 from pydantic import StringConstraints
@@ -22,6 +23,9 @@ OutcomeId: TypeAlias = Annotated[str, StringConstraints(pattern=r"^OUT-[0-9]{3,}
 RiskId: TypeAlias = Annotated[str, StringConstraints(pattern=r"^RISK-[0-9]{3,}$")]
 MappingId: TypeAlias = Annotated[str, StringConstraints(pattern=r"^MAP-[0-9]{3,}$")]
 MandatoryDecisionId: TypeAlias = Annotated[str, StringConstraints(pattern=r"^MD-[0-9]{3,}$")]
+ThreatContextId: TypeAlias = Annotated[
+    str, StringConstraints(pattern=r"^THRCTX-[A-Z0-9]+(?:-[A-Z0-9]+)*$")
+]
 
 IDENTIFIER_PATTERNS = {
     "CAP": re.compile(r"^CAP-[0-9]{2,3}$"),
@@ -35,6 +39,7 @@ IDENTIFIER_PATTERNS = {
     "RISK": re.compile(r"^RISK-[0-9]{3,}$"),
     "MAP": re.compile(r"^MAP-[0-9]{3,}$"),
     "MD": re.compile(r"^MD-[0-9]{3,}$"),
+    "THRCTX": re.compile(r"^THRCTX-[A-Z0-9]+(?:-[A-Z0-9]+)*$"),
 }
 
 
@@ -46,3 +51,13 @@ def validate_identifier(value: str) -> str:
         raise ValueError(f"Invalid or unknown security-knowledge identifier: {value!r}")
     return value
 
+
+def build_threat_context_id(authority: str, stable_key: str) -> str:
+    """Build an internal ID from a stable internal identity, never randomly."""
+    if not authority.strip() or not stable_key.strip():
+        raise ValueError("authority and stable_key must be non-empty")
+    namespace = re.sub(r"[^A-Z0-9]+", "-", authority.upper()).strip("-")
+    if not namespace:
+        raise ValueError("authority must contain an ASCII letter or digit")
+    digest = sha256(f"{authority.strip()}\x00{stable_key.strip()}".encode()).hexdigest()[:16].upper()
+    return f"THRCTX-{namespace}-{digest}"

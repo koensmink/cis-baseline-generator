@@ -13,6 +13,8 @@ A deterministic toolkit for parsing CIS Benchmarks, evaluating Mandatory control
 - Parses supported CIS Benchmark PDFs into traceable `ControlRecord` JSONL or CSV.
 - Classifies controls as **Regular Control**, **Review Required**, or **Candidate Mandatory**.
 - Evaluates security boundaries, attack paths, capabilities, threats, techniques, and outcomes.
+- Resolves structured threat contexts and produces a deterministic, provenance-bearing advisory control-priority overlay.
+- Optionally interprets a local advisory into an untrusted proposal and gates conversion through explicit human approval.
 - Compares structured exports between benchmark versions.
 - Maps supported Windows Server controls to Intune using deterministic rule packs.
 - Uses optional LLM suggestions only for unresolved Intune mappings; suggestions remain advisory.
@@ -157,6 +159,26 @@ See:
 - [Security Knowledge Catalog](docs/SECURITY_KNOWLEDGE_CATALOG.md)
 - [Security Knowledge Model Implementation](docs/SECURITY_KNOWLEDGE_MODEL_IMPLEMENTATION.md)
 
+### Threat Intelligence
+
+Threat intelligence is an advisory layer over the unchanged Mandatory assessment.
+Structured `ThreatContext` objects resolve to catalog paths, boundaries, techniques,
+and outcomes before existing mitigation mappings can project them onto controls.
+Phase B causal-precision rules require an exact resolved-boundary intersection or
+an explicitly asserted context-technique attribution; attack-path equality alone
+cannot elevate relevance. Context techniques remain distinct from techniques
+derived through catalog traversal, and every driver retains its context,
+resolution, mapping, causal basis, confidence caps, findings, and provenance.
+
+Optional AI interpretation is isolated from deterministic analysis. Provider output
+is untrusted, evidence bindings are exact and source-grounded, and a human must
+explicitly decide every material assertion before an approved `ThreatContext` can
+enter resolution and prioritization. Neither AI nor threat relevance can change the
+base Mandatory proposal.
+
+See [Threat-Informed Prioritization](docs/THREAT_INFORMED_PRIORITIZATION.md) and
+[AI Threat Interpretation Contract](docs/AI_THREAT_INTERPRETATION_CONTRACT.md).
+
 ### Intune Mapping
 
 The Intune mapper is a downstream implementation engine. Current deterministic rule packs target supported Windows Server controls and produce baseline, manual-review, conflict, policy, and optional suggestion artifacts.
@@ -202,7 +224,8 @@ For parser-specific compatibility and failure behavior, see [CIS Benchmark Parse
 | [Security Knowledge Model](docs/SECURITY_KNOWLEDGE_MODEL.md) | Normative knowledge model |
 | [Security Knowledge Catalog](docs/SECURITY_KNOWLEDGE_CATALOG.md) | Authoritative reusable catalog |
 | [Security Knowledge Model Implementation](docs/SECURITY_KNOWLEDGE_MODEL_IMPLEMENTATION.md) | Implementation details |
-| [Threat-Informed Prioritization](docs/THREAT_INFORMED_PRIORITIZATION.md) | Structured threat resolution, advisory prioritization, and CLI exports |
+| [Threat-Informed Prioritization](docs/THREAT_INFORMED_PRIORITIZATION.md) | Threat context resolution, causal projection, advisory prioritization, and provenance |
+| [AI Threat Interpretation Contract](docs/AI_THREAT_INTERPRETATION_CONTRACT.md) | Provider-neutral authority, grounding, validation, and human-approval contract |
 | [v1 Release Notes](docs/V1_RELEASE_NOTES.md) | Release-specific notes |
 
 ## License and CIS Content

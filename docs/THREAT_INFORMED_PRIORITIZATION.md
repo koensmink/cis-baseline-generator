@@ -212,3 +212,33 @@ Actual control relevance remains the deterministic Phase 2/3 result after an
 approved ThreatContext enters that pipeline. See
 [AI Threat Interpretation Contract](AI_THREAT_INTERPRETATION_CONTRACT.md) for the
 authority, grounding, provenance, adversarial-input, and conversion rules.
+
+## Phase 4C: explicit human approval
+
+Phase 4C exposes the existing Phase 4A approval gate as a separate provider-free
+command:
+
+```text
+cis-threat-interpret
+        ↓
+ProposedThreatInterpretation
+        ↓
+cis-threat-approve
+        ↓
+ThreatContext
+        ↓
+cis-threat-analyze
+        ↓
+Threat-informed advisory overlay
+```
+
+The reviewer must select `approved`, `rejected`, or `needs_revision` and explicitly
+decide every material assertion before approval can produce a `ThreatContext`.
+Rejection is a successful review outcome but produces no context. Human corrections
+are restricted to the Phase 4A allowlist, recorded in approval provenance, and
+cannot override catalog integrity or validated confidence caps.
+
+The `ThreatContext` is the first AI-originated object allowed into deterministic
+resolution. Even then, Phase 2 and Phase 3 retain their existing rules. The base
+Mandatory proposal remains an independent immutable dimension and is never changed
+by interpretation, approval, resolution, or prioritization.

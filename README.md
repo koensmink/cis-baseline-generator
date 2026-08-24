@@ -84,10 +84,29 @@ cis-threat-interpret advisory.txt \
 ```
 
 Inspect the resulting untrusted `ProposedThreatInterpretation`, complete the
-separate human approval/conversion step, and supply only the approved
-`ThreatContext` to `cis-threat-analyze`. The API key is read at runtime and is never
-written to artifacts. Provider output cannot assign Mandatory status, select CIS
-controls, or assign threat relevance. Provider and network failures fail closed.
+separate human approval/conversion step:
+
+```bash
+cis-threat-approve proposed-threat.json \
+  --reviewer "security-engineer" \
+  --approval approved \
+  --reviewed-at 2026-08-24T12:30:00Z \
+  --accept A-SOURCE \
+  --accept A-PATH \
+  --reject A-UNCERTAIN \
+  --rationale "Reviewed against the locally supplied advisory" \
+  -o threat-context.json
+```
+
+Every material assertion must be explicitly accepted or rejected; there is no
+implicit approval or `--accept-all`. Use `--list-assertions` to inspect concise
+assertions without creating an approval. Rejection and `needs_revision` are valid
+outcomes and write approval records without creating a `ThreatContext`.
+
+Only the approved `ThreatContext` may be supplied to `cis-threat-analyze`. The API
+key is read at runtime by interpretation only and is never needed by approval.
+Provider output cannot assign Mandatory status, select CIS controls, or assign
+threat relevance. Provider, validation, and approval failures fail closed.
 
 ### Optional: map supported controls to Intune
 

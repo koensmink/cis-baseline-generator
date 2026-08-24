@@ -148,18 +148,42 @@ CSV columns have a fixed order and retain source scope, immutable base proposal,
 
 The CLI adds no AI, network access, remote ingestion, or classifier cutover. In particular, `base_proposal: Regular Control` remains unchanged when `threat_relevance: High` and `advisory_action: prioritize`.
 
-## Phase 4: future AI interpretation
+## Phase 4A: AI interpretation contract and governance
 
-Phase 4 is not implemented:
+Phase 4A implements the typed, provider-neutral contract boundary only:
 
 ```text
 Unstructured threat advisory
-      ↓
-AI interpretation
-      ↓
-validated ThreatContext
-      ↓
+        ↓
+Untrusted source document
+        ↓
+AI interpretation contract
+        ↓
+ProposedThreatInterpretation
+        ↓
+Validation
+        ↓
+Human approval
+        ↓
+ThreatContext
+        ↓
 existing deterministic Phase 2/3 pipeline
 ```
 
-Before Phase 4, governance must define validation authority, provenance and legal controls, prompt/model versioning, adversarial-input handling, confidence calibration, human approval, and fail-closed behavior. AI must never write a final Mandatory classification.
+AI is not authoritative. It cannot classify controls, assign Mandatory status,
+assign threat relevance or advisory actions, select CIS controls, decide boundary
+completeness, or infer customer vulnerability. Output is untrusted until both
+deterministic validation and explicit human approval succeed. Validation alone does
+not imply approval.
+
+Source advisories are untrusted input. Material assertions retain evidence locators
+and support types; active exploitation and affected technology require explicit
+source evidence. Unknown or malformed catalog IDs, forbidden decision fields,
+unsupported model knowledge, sensitive output, and attempted prompt-injection
+output fail closed.
+
+There is no provider integration, model call, network access, or remote ingestion
+in Phase 4A. Activity state remains at the interpretation boundary and does not
+change Phase 3 relevance rules. See
+[AI Threat Interpretation Contract](AI_THREAT_INTERPRETATION_CONTRACT.md) for the
+authority, grounding, provenance, adversarial-input, and conversion rules.

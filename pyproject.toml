@@ -29,3 +29,4 @@ dependencies = [
 cis-pdf2csv = "cis_pdf2csv.cli:main"
 cis-intune-map = "cis_pdf2csv.intune_mapper.cli:main"
 cis-mandatory-analyze = "cis_pdf2csv.mandatory.cli:main"
+cis-threat-analyze = "cis_pdf2csv.security_knowledge.threat_intelligence.cli:main"

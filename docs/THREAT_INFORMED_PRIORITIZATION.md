@@ -118,6 +118,36 @@ Projection, drivers, overlays, findings, and summaries are frozen typed models. 
 
 `ThreatPrioritySummary` reports projected controls, Normal/Elevated/High/Critical counts, review-capped controls, unique contexts/paths/boundaries, controls by immutable base proposal, and controls by mitigation role. It has no target percentages and does not modify production counts.
 
+## Phase 3.1 CLI
+
+`cis-threat-analyze` exposes the existing deterministic Phase 1–3 pipeline without duplicating its reasoning:
+
+```bash
+cis-threat-analyze \
+  controls.jsonl \
+  --threat-context threat-context.json \
+  --at-time 2026-08-24T12:00:00Z \
+  -o threat-overlay.csv
+```
+
+`controls.jsonl` contains parser-produced `ControlRecord` objects. Each repeated `--threat-context` argument names one structured JSON object that validates as `ThreatContext`; prose and URLs are not accepted. `--historical` explicitly enables Phase 2 historical resolution. `--at-time` accepts a timezone-aware ISO-8601 instant and makes lifecycle evaluation reproducible; when omitted, current UTC time is used.
+
+The CLI recomputes base assessments internally through the unchanged `assess_controls()` Mandatory pipeline. It joins those assessments by composite `SourceIdentity`, adapts existing atomic mitigation mappings, uses catalog migration relationships where a legacy boundary-set ID needs its normative boundary, and then calls the existing resolver, projection, and prioritization APIs. It never joins on bare control ID.
+
+For `-o threat-overlay.csv`, the deterministic artifacts are:
+
+- `threat-overlay.csv`: all projected overlays;
+- `threat-overlay-high.csv`: High and Critical only;
+- `threat-overlay-review.csv`: only overlays whose advisory action is `review`;
+- `threat-overlay.json`: complete structured overlay models; and
+- `threat-overlay-summary.json`: priority summary, projection findings, and full ThreatResolution metadata.
+
+The Rich summary reports supplied contexts, projected controls, each relevance level, and review-capped controls. All-inactive contexts succeed, remain visible in summary JSON resolution metadata, and produce an empty overlay. Missing contexts and malformed or blocking input exit with status 2 and concise diagnostics.
+
+CSV columns have a fixed order and retain source scope, immutable base proposal, relevance/confidence/action, contexts and resolutions, paths, boundaries, techniques, all role dimensions, applicability, security effects, rationale, and findings. JSON keys and all model collections are deterministically ordered. No random identifier or output timestamp is added. Supplying the same inputs and `--at-time` produces byte-identical artifacts.
+
+The CLI adds no AI, network access, remote ingestion, or classifier cutover. In particular, `base_proposal: Regular Control` remains unchanged when `threat_relevance: High` and `advisory_action: prioritize`.
+
 ## Phase 4: future AI interpretation
 
 Phase 4 is not implemented:

@@ -36,17 +36,36 @@ python -m pip install -e .
 
 Python **3.10 or later** is required.
 
-### Parse a CIS Benchmark
+### Three-step analysis workflow
+
+1. Parse the benchmark:
 
 ```bash
 cis-pdf2csv benchmark.pdf -p L1 -o controls.jsonl --format jsonl
 ```
 
-### Run Mandatory analysis
+2. Analyze base Mandatory classifications:
 
 ```bash
 cis-mandatory-analyze controls.jsonl -o mandatory-review.csv
 ```
+
+3. Apply an already-validated structured ThreatContext:
+
+```bash
+cis-threat-analyze \
+  controls.jsonl \
+  --threat-context threat-context.json \
+  --at-time 2026-08-24T12:00:00Z \
+  -o threat-overlay.csv
+```
+
+The Mandatory classification and threat relevance are independent dimensions:
+
+- Base classification: **Candidate Mandatory**, **Review Required**, or **Regular Control**.
+- Threat relevance: **Normal**, **Elevated**, **High**, or **Critical**.
+
+For example, a control can remain `Regular Control` while receiving `High` threat relevance and the advisory action `prioritize`. It has not become Mandatory. The threat CLI recomputes the unchanged base assessment from the supplied controls, accepts repeated `--threat-context` flags, and performs no AI interpretation or remote ingestion.
 
 ### Optional: map supported controls to Intune
 
@@ -142,6 +161,7 @@ For parser-specific compatibility and failure behavior, see [CIS Benchmark Parse
 | [Security Knowledge Model](docs/SECURITY_KNOWLEDGE_MODEL.md) | Normative knowledge model |
 | [Security Knowledge Catalog](docs/SECURITY_KNOWLEDGE_CATALOG.md) | Authoritative reusable catalog |
 | [Security Knowledge Model Implementation](docs/SECURITY_KNOWLEDGE_MODEL_IMPLEMENTATION.md) | Implementation details |
+| [Threat-Informed Prioritization](docs/THREAT_INFORMED_PRIORITIZATION.md) | Structured threat resolution, advisory prioritization, and CLI exports |
 | [v1 Release Notes](docs/V1_RELEASE_NOTES.md) | Release-specific notes |
 
 ## License and CIS Content

@@ -10,6 +10,7 @@ from cis_pdf2csv.mandatory.schema import MandatoryAssessment
 from cis_pdf2csv.source_identity import SourceIdentity
 
 from ..boundaries import ApplicabilityMode
+from ..catalog.registry import SecurityKnowledgeCatalog
 from ..mitigation import (
     BoundaryRole,
     MitigationMapping,
@@ -184,6 +185,8 @@ def project_threat_resolutions(
     resolutions: Iterable[ThreatResolution],
     mappings: Iterable[MitigationMapping],
     assessments: Iterable[MandatoryAssessment],
+    *,
+    catalog: SecurityKnowledgeCatalog | None = None,
 ) -> ControlProjectionResult:
     """Join resolved knowledge to controls only through atomic mitigation mappings."""
     assessment_by_identity = _assessment_index(assessments)
@@ -192,6 +195,15 @@ def project_threat_resolutions(
     sorted_resolutions = sorted(
         resolutions,
         key=lambda item: (item.threat_context_id, item.threat_context_revision),
+    )
+    migrated_boundaries = (
+        {
+            item.legacy_boundary_set_id: item.normative_boundary_definition_id
+            for item in catalog.migration_map
+            if item.migration_status == "mapped"
+        }
+        if catalog is not None
+        else {}
     )
     for mapping in sorted(mappings, key=lambda item: item.mapping_id):
         identity = _identity(mapping.source_recommendation_id)
@@ -223,9 +235,13 @@ def project_threat_resolutions(
             if resolved_path is None:
                 continue
             resolved_boundaries = {item.object_id for item in resolved_path.boundaries}
+            effective_boundary_id = migrated_boundaries.get(
+                mapping.boundary_set_definition_id or "",
+                mapping.boundary_definition_id,
+            )
             boundary_ids = (
-                (mapping.boundary_definition_id,)
-                if mapping.boundary_definition_id in resolved_boundaries
+                (effective_boundary_id,)
+                if effective_boundary_id in resolved_boundaries
                 else ()
             )
             projection_findings: list[ProjectionFinding] = []

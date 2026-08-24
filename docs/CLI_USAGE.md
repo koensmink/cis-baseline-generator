@@ -2,13 +2,16 @@
 
 This document contains the operational command reference for the CIS Security Analysis and Baseline Engineering Toolkit.
 
-The package currently installs three console commands:
+The package currently installs six console commands:
 
 | Command | Purpose |
 |---|---|
 | `cis-pdf2csv` | Parse CIS Benchmark PDFs or dispatch a single JSONL input to the Intune mapper |
 | `cis-mandatory-analyze` | Run deterministic Mandatory-control analysis and attack-path coverage |
 | `cis-intune-map` | Map parser-produced JSONL to supported Intune artifacts |
+| `cis-threat-analyze` | Resolve approved threat contexts and produce a deterministic advisory control-priority overlay |
+| `cis-threat-interpret` | Use the optional OpenAI adapter to create an untrusted structured proposal from a local advisory |
+| `cis-threat-approve` | Record explicit human review and optionally convert an approved proposal to a `ThreatContext` |
 
 Benchmark diff is available through `python -m cis_pdf2csv.diff`.
 
@@ -228,6 +231,113 @@ cis-intune-map controls.jsonl -o intune_out --llm-fallback
 
 If `--llm-fallback` is specified without `OPENAI_API_KEY`, the current implementation falls back to heuristic suggestions rather than making an OpenAI API call.
 
+## Threat Intelligence
+
+These commands form separate trust stages. `cis-threat-interpret` cannot create a
+control overlay, `cis-threat-approve` performs no provider call, and only an
+approved `ThreatContext` can enter `cis-threat-analyze`. For the model and authority
+boundaries, see [Threat-Informed Control Prioritization](THREAT_INFORMED_PRIORITIZATION.md)
+and [AI Threat Interpretation Contract](AI_THREAT_INTERPRETATION_CONTRACT.md).
+
+### Analyze approved threat contexts
+
+```bash
+cis-threat-analyze \
+  controls.jsonl \
+  --threat-context threat-context.json \
+  --at-time 2026-08-24T12:00:00Z \
+  -o threat-overlay.csv
+```
+
+Repeat `--threat-context` to supply multiple structured contexts. The input must be
+parser-produced `ControlRecord` JSONL; prose, URLs, and proposed interpretations are
+not accepted. `--at-time` must include a timezone offset and makes lifecycle
+evaluation reproducible. `--historical` explicitly allows historical catalog
+resolution.
+
+For `-o threat-overlay.csv`, the command writes:
+
+```text
+threat-overlay.csv
+threat-overlay-high.csv
+threat-overlay-review.csv
+threat-overlay.json
+threat-overlay-summary.json
+```
+
+The CSV contains projected overlays, while the structured JSON and summary retain
+the causal drivers, exact context and resolution identities, projection findings,
+provenance, and resolved knowledge metadata. The base Mandatory proposal is copied
+unchanged.
+
+Equivalent module invocation:
+
+```bash
+python -m cis_pdf2csv.security_knowledge.threat_intelligence.cli \
+  controls.jsonl \
+  --threat-context threat-context.json \
+  --at-time 2026-08-24T12:00:00Z \
+  -o threat-overlay.csv
+```
+
+### Interpret a local advisory with the optional provider
+
+```bash
+OPENAI_API_KEY="<runtime-secret>" cis-threat-interpret advisory.txt \
+  --source-type vendor_advisory \
+  --source-name "Example Vendor" \
+  --source-reference "ADV-2026-001" \
+  --model "<structured-output-capable-model>" \
+  --generated-at 2026-08-24T12:00:00Z \
+  -o proposed-threat.json
+```
+
+The command accepts a local UTF-8 text file, not a URL or live feed. It writes the
+untrusted proposal artifact and `proposed-threat-summary.json`. Optional controls
+are `--published-at`, `--timeout-seconds`, `--max-retries`, and
+`--max-output-tokens`; `--provider` currently accepts only `openai`.
+
+`OPENAI_API_KEY` is read at runtime. Provider output is validated fail-closed and
+does not become a `ThreatContext` automatically.
+
+### Inspect and approve a proposal
+
+List all assertions without recording a decision:
+
+```bash
+cis-threat-approve proposed-threat.json --list-assertions
+```
+
+Record an approval after explicitly deciding every material assertion:
+
+```bash
+cis-threat-approve proposed-threat.json \
+  --reviewer "security-engineer" \
+  --approval approved \
+  --reviewed-at 2026-08-24T12:30:00Z \
+  --accept A-SOURCE \
+  --accept A-PATH \
+  --reject A-UNCERTAIN \
+  --rationale "Reviewed against the locally supplied advisory" \
+  -o threat-context.json
+```
+
+There is no implicit approval or accept-all option. Repeat `--accept` and `--reject`
+as needed. Narrow, recorded corrections are available through `--set-confidence`,
+`--set-severity`, `--set-valid-from`, `--set-valid-until`, and
+`--set-applicability-scope`.
+
+An `approved` decision writes:
+
+```text
+threat-context.json
+threat-context-approval.json
+threat-context-approval-summary.json
+```
+
+`rejected` and `needs_revision` are successful review outcomes but write only the
+approval and summary artifacts; they do not create `threat-context.json`.
+
 ## Containers
 
 ### Build
@@ -340,4 +450,7 @@ Implementation:
 - parser CLI: [`src/cis_pdf2csv/cli.py`](../src/cis_pdf2csv/cli.py)
 - Mandatory CLI: [`src/cis_pdf2csv/mandatory/cli.py`](../src/cis_pdf2csv/mandatory/cli.py)
 - Intune CLI: [`src/cis_pdf2csv/intune_mapper/cli.py`](../src/cis_pdf2csv/intune_mapper/cli.py)
+- threat analysis CLI: [`src/cis_pdf2csv/security_knowledge/threat_intelligence/cli.py`](../src/cis_pdf2csv/security_knowledge/threat_intelligence/cli.py)
+- threat interpretation CLI: [`src/cis_pdf2csv/security_knowledge/threat_intelligence/ai/provider_cli.py`](../src/cis_pdf2csv/security_knowledge/threat_intelligence/ai/provider_cli.py)
+- threat approval CLI: [`src/cis_pdf2csv/security_knowledge/threat_intelligence/ai/approval_cli.py`](../src/cis_pdf2csv/security_knowledge/threat_intelligence/ai/approval_cli.py)
 - benchmark diff: [`src/cis_pdf2csv/diff.py`](../src/cis_pdf2csv/diff.py)

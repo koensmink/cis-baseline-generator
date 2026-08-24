@@ -23,6 +23,7 @@ A deterministic toolkit for parsing CIS Benchmarks, evaluating Mandatory control
 
 ![System architecture](docs/architecture.png)
 
+![System architecture](docs/cis-baseline-generator-discussion-board.png)
 
 The parser establishes source evidence. Mandatory reasoning and Security Knowledge operate on structured records. Intune mapping is a downstream implementation capability and is not part of the authoritative knowledge model.
 

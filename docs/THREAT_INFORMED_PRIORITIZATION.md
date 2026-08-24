@@ -118,6 +118,215 @@ Projection, drivers, overlays, findings, and summaries are frozen typed models. 
 
 `ThreatPrioritySummary` reports projected controls, Normal/Elevated/High/Critical counts, review-capped controls, unique contexts/paths/boundaries, controls by immutable base proposal, and controls by mitigation role. It has no target percentages and does not modify production counts.
 
+## Phase 3.1 operational boundary
+
+The threat analysis entrypoint exposes the deterministic Phase 1–3 pipeline without duplicating its reasoning.
+
+`controls.jsonl` contains parser-produced `ControlRecord` objects. Each repeated `--threat-context` argument names one structured JSON object that validates as `ThreatContext`; prose and URLs are not accepted. `--historical` explicitly enables Phase 2 historical resolution. `--at-time` accepts a timezone-aware ISO-8601 instant and makes lifecycle evaluation reproducible; when omitted, current UTC time is used.
+
+The CLI recomputes base assessments internally through the unchanged `assess_controls()` Mandatory pipeline. It joins those assessments by composite `SourceIdentity`, adapts existing atomic mitigation mappings, uses catalog migration relationships where a legacy boundary-set ID needs its normative boundary, and then calls the existing resolver, projection, and prioritization APIs. It never joins on bare control ID.
+
+The deterministic artifacts are:
+
+- `threat-overlay.csv`: all projected overlays;
+- `threat-overlay-high.csv`: High and Critical only;
+- `threat-overlay-review.csv`: only overlays whose advisory action is `review`;
+- `threat-overlay.json`: complete structured overlay models; and
+- `threat-overlay-summary.json`: priority summary, projection findings, and full ThreatResolution metadata.
+
+The Rich summary reports supplied contexts, projected controls, each relevance level, and review-capped controls. All-inactive contexts succeed, remain visible in summary JSON resolution metadata, and produce an empty overlay. Missing contexts and malformed or blocking input exit with status 2 and concise diagnostics.
+
+CSV columns have a fixed order and retain source scope, immutable base proposal, relevance/confidence/action, contexts and resolutions, paths, boundaries, techniques, all role dimensions, applicability, security effects, rationale, and findings. JSON keys and all model collections are deterministically ordered. No random identifier or output timestamp is added. Supplying the same inputs and `--at-time` produces byte-identical artifacts.
+
+The CLI adds no AI, network access, remote ingestion, or classifier cutover. In particular, `base_proposal: Regular Control` remains unchanged when `threat_relevance: High` and `advisory_action: prioritize`.
+
+Exact commands, options, examples, and output naming are maintained separately in
+[CLI Usage](CLI_USAGE.md#threat-intelligence).
+
+## Phase 4A: AI interpretation contract and governance
+
+Phase 4A implements the typed, provider-neutral contract boundary only:
+
+```text
+Unstructured threat advisory
+        ↓
+Untrusted source document
+        ↓
+AI interpretation contract
+        ↓
+ProposedThreatInterpretation
+        ↓
+Validation
+        ↓
+Human approval
+        ↓
+ThreatContext
+        ↓
+existing deterministic Phase 2/3 pipeline
+```
+
+AI is not authoritative. It cannot classify controls, assign Mandatory status,
+assign threat relevance or advisory actions, select CIS controls, decide boundary
+completeness, or infer customer vulnerability. Output is untrusted until both
+deterministic validation and explicit human approval succeed. Validation alone does
+not imply approval.
+
+Source advisories are untrusted input. Material assertions retain evidence locators
+and support types; active exploitation and affected technology require explicit
+source evidence. Unknown or malformed catalog IDs, forbidden decision fields,
+unsupported model knowledge, sensitive output, and attempted prompt-injection
+output fail closed.
+
+There is no provider integration, model call, network access, or remote ingestion
+in Phase 4A. Activity state remains at the interpretation boundary and does not
+change Phase 3 relevance rules.
+
+Phase 4B adds the separate optional `cis-threat-interpret` command. It reads only a
+local advisory file and calls the isolated OpenAI provider adapter using strict
+structured output. It writes an untrusted proposal and audit summary, not a
+ThreatContext or control overlay. URLs, live feeds, background ingestion, automatic
+approval, and classifier cutover remain prohibited.
+
+```text
+advisory.txt
+    ↓
+cis-threat-interpret
+    ↓
+proposed-threat.json
+    ↓
+human review / explicit conversion
+    ↓
+approved ThreatContext JSON
+    ↓
+cis-threat-analyze
+```
+
+Provider requests include only the contract, active catalog ID/name vocabulary, and
+untrusted advisory content. Provider errors and contract violations fail closed.
+Actual control relevance remains the deterministic Phase 2/3 result after an
+approved ThreatContext enters that pipeline. See
+[AI Threat Interpretation Contract](AI_THREAT_INTERPRETATION_CONTRACT.md) for the
+authority, grounding, provenance, adversarial-input, and conversion rules.
+
+Provider evidence binding is exact: every proposed security-knowledge ID,
+technology, or non-unknown activity state requires a matching closed-vocabulary
+assertion with the same canonical value. Inferred catalog mappings remain marked as
+inferred and lower confidence conservatively. Caller-supplied source metadata is
+validated directly rather than re-asserted by the model.
+
+## Phase 4C: explicit human approval
+
+Phase 4C exposes the existing Phase 4A approval gate as a separate provider-free
+command:
+
+```text
+cis-threat-interpret
+        ↓
+ProposedThreatInterpretation
+        ↓
+cis-threat-approve
+        ↓
+ThreatContext
+        ↓
+cis-threat-analyze
+        ↓
+Threat-informed advisory overlay
+```
+
+The reviewer must select `approved`, `rejected`, or `needs_revision` and explicitly
+decide every material assertion before approval can produce a `ThreatContext`.
+Rejection is a successful review outcome but produces no context. Human corrections
+are restricted to the Phase 4A allowlist, recorded in approval provenance, and
+cannot override catalog integrity or validated confidence caps.
+
+The `ThreatContext` is the first AI-originated object allowed into deterministic
+resolution. Even then, Phase 2 and Phase 3 retain their existing rules. The base
+Mandatory proposal remains an independent immutable dimension and is never changed
+by interpretation, approval, resolution, or prioritization.
+
+## Phase 3 precision and causal distance
+
+Threat relevance starts at `Normal`. A driver establishes a higher relevance only
+through an exact resolved-boundary intersection or an exact mapping attribution to
+an explicitly asserted ThreatContext technique. Attack-path equality alone does not
+establish elevation. Confidence, applicability, resolution, equivalence, mapping
+eligibility, and role rules are ceilings: they can reduce an established relevance
+but never create one.
+
+Every path-to-mapping driver is evaluated independently. A valid boundary-backed
+driver may determine the aggregate result while a separate boundary-mismatched
+driver remains visible as `Normal` with
+`THREAT_PROJECTION_BOUNDARY_NOT_RESOLVED`. Supporting hardening, detection,
+investigation, and recovery without another strong causal basis remain `Normal`.
+Information-hiding, fine-tuning, and operational mappings always have a `Normal`
+ceiling.
+
+Projection output separates `context_technique_ids` from
+`derived_technique_ids`. Techniques inherited as siblings of an explicitly selected
+attack path remain catalog context and cannot independently establish relevance.
+The legacy compatibility adapter still has known mapping-quality debt: broad
+criterion-derived roles, generic boundary identifiers, synthesized scenario IDs,
+missing technique attribution, and control-family fallback effects. Those data
+issues are intentionally not repaired by the Phase 3 precision rules.
+- Regular Control remains Regular Control, including when threat relevance is High.
+
+Threat relevance is an advisory dimension, not a classifier cutover.
+
+## Relevance and confidence
+
+Threat relevance and priority confidence are independent. Relevance uses four non-numeric values:
+
+- `Normal`: an intersecting mapped control is tuning, information-hiding, operational, inactive, or otherwise ineligible for escalation. Controls without any intersection are omitted from the optional overlay.
+- `Elevated`: a valid intersection exists but is supporting/detection-oriented, conditional, below High confidence, partially resolved, boundary-incomplete, or review-capped.
+- `High`: requires a fully resolved active knowledge chain, High conservative confidence, a resolved path and boundary, universal benchmark applicability, no participation blocker, a preventive/restrictive/isolating/protective mapping, and a primary, complementary-core, or prerequisite role.
+- `Critical`: reserved for the High conditions plus a future structured immediate-exploitation/activity driver.
+
+Phase 1 has no structured exploitation/activity state. Phase 3 therefore deliberately caps at High. Critical severity alone, prose, incident-like wording, or evidence type cannot produce Critical relevance.
+
+Confidence reuses `High`, `Medium`, and `Low`. Per-driver confidence is the minimum of `ThreatResolution.confidence` and `MitigationMapping.confidence`; Phase 2 already guarantees resolution confidence cannot exceed ThreatContext confidence. No numeric or hidden weighted score exists.
+
+## Advisory actions
+
+Actions are separate from relevance:
+
+- Normal → `none`;
+- Elevated → `monitor`, or `review` when an explicit cap requires analyst judgment;
+- High → `prioritize`;
+- Critical → `urgent_prioritize` (currently unreachable).
+
+Mandatory, Required, Failed, and Noncompliant are not overlay actions.
+
+## Role-based ceilings
+
+- Standalone primary, complementary-core, and prerequisite preventive effects may reach High.
+- Supporting hardening is capped at Elevated.
+- Detection, investigation, and recovery are capped at Elevated.
+- Fine-tuning, information-hiding, and operational roles have a Normal ceiling.
+
+These rules use generic model roles and contain no Windows-specific semantics. Detection controls may become visible, but generic logging is not included merely because a path exists; it still needs an authoritative mapping.
+
+## Applicability
+
+Threat applicability, source/control applicability, and customer deployment applicability remain distinct. Universal benchmark applicability may support High. `mandatory_when_deployed` and unresolved applicability are projected but capped at Elevated with `review`; the resolver never assumes that a customer's feature is deployed or that the environment is vulnerable.
+
+## Multiple threats and paths
+
+Every mapping/context pair becomes a separate `ThreatPriorityDriver` with its own path, boundary, effect, role, relevance, rationale, confidence, and caps. Aggregation preserves all drivers and selects the highest valid relevance without summing scores. An incomplete driver does not invalidate an independently complete driver. Distinct paths remain distinct assertions.
+
+## Equivalence and overlap
+
+Phase 3 reuses existing role, strength, overlap, related-control, security-effect, scope, and source-identity evidence. A broader primary mapping may reach High while an explicitly supporting narrower alternative remains Elevated. Multiple primary mappings claiming the same boundary, security effect, applicability, and resolution are ambiguous: each is capped at Elevated with `review`. Phase 3 never infers equivalence from titles.
+
+## Explainability and deterministic output
+
+Every non-Normal driver identifies the originating context and resolution, attack path, boundary, enforced security effect, mitigation/boundary role, base proposal, relevance reason, confidence, and every cap preventing a higher result. Text is concise and deterministic; no generated narrative is used.
+
+Projection, drivers, overlays, findings, and summaries are frozen typed models. All inputs and output collections use canonical composite-identity/ID ordering. JSON uses sorted keys, compact separators, and no implicit timestamps.
+
+## Summary
+
+`ThreatPrioritySummary` reports projected controls, Normal/Elevated/High/Critical counts, review-capped controls, unique contexts/paths/boundaries, controls by immutable base proposal, and controls by mitigation role. It has no target percentages and does not modify production counts.
+
 ## Phase 3.1 CLI
 
 `cis-threat-analyze` exposes the existing deterministic Phase 1–3 pipeline without duplicating its reasoning:

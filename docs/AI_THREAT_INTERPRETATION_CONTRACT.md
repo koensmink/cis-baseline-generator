@@ -125,6 +125,137 @@ training-use permission, and whether sensitive or customer data is allowed; it d
 not claim provider guarantees. The default rejects potential secrets and personal
 data before any request.
 
+## Operator workflow boundary
+
+1. Obtain advisory text out of band and save it locally.
+2. Create an untrusted structured proposal with the optional provider adapter.
+3. Inspect `proposed-threat.json` and its summary.
+4. Record explicit human acceptance or rejection for each material assertion.
+5. Export the approved `ThreatContext`; rejection or revision creates no context.
+6. Supply only that approved context to deterministic threat analysis.
+
+Exact commands and current options are maintained separately in
+[CLI Usage](CLI_USAGE.md#threat-intelligence).
+
+The command accepts no URL and performs no fetching or live-feed ingestion. It
+writes `proposed-threat.json` with proposal, validation, and audit metadata plus
+`proposed-threat-summary.json`. Full source content and full raw provider responses
+are not persisted. Exit codes are 0 for a valid proposal, 2 for local input or
+configuration errors, 3 for provider/network failures, and 4 for blocked provider
+output.
+
+Provider output may be nondeterministic even with fixed generation parameters.
+Audit metadata retains provider/model identity, prompt and contract versions,
+generation-parameter identity, input and vocabulary hashes, request ID, and raw
+response hash. Deterministic behavior resumes after strict parsing at the Phase 4A
+boundary. No proposal is approved or converted automatically.
+
+## Phase 4C human approval
+
+`cis-threat-approve` is a provider-free orchestration layer over the existing
+`ThreatInterpretationApproval` model and
+`build_threat_context_from_approved_interpretation()` gate. It performs no network
+access, requires no API key, and does not import provider, Mandatory, resolution, or
+prioritization execution code.
+
+Approval never defaults to `approved`, and there is no accept-all operation. Every
+material assertion—activity, confidence/severity evidence, technology/applicability,
+catalog IDs, temporal claims, and source-reference claims—must be explicitly
+accepted or rejected before conversion. Unknown or overlapping decisions fail as
+input errors. Blocking Phase 4A findings and invalid current catalog references
+cannot be overridden by a reviewer.
+
+Narrow corrections support confidence, severity, validity bounds, and applicability
+scope. Each is recorded as an `ApprovalModification`. Confidence remains capped by
+validated interpretation confidence; severity never implies activity. Activity
+state is not modifiable because the current `ThreatContext` deliberately does not
+carry that field and Phase 3 semantics remain unchanged.
+
+For an approved decision the command writes `threat-context.json`,
+`threat-context-approval.json`, and `threat-context-approval-summary.json`. Rejected
+and `needs_revision` decisions write only the approval and summary artifacts. The
+approval record retains proposal, document, raw-response, contract, prompt,
+interpretation, validation, reviewer, decision, modification, and timestamp
+identities without retaining advisory content, provider secrets, or reasoning.
+
+`--reviewed-at` is optional for operator convenience and otherwise uses current UTC.
+Supplying it explicitly is required for byte-identical replay. Exit code 0 means a
+valid review was recorded, 2 means input/schema failure, and 4 means an approved
+decision could not pass the conversion gate.
+
+For a manual live smoke test, use invented non-sensitive advisory text, configure a
+model that supports strict structured output, follow the CLI reference, and inspect
+both artifacts. Live calls are never part of automated tests.
+
+## Validation and approval
+
+Machine validation and human approval are separate. Schema-valid and catalog-valid
+output remains non-participating while approval is `pending`. `rejected` and
+`needs_revision` proposals cannot convert. Conversion requires a matching explicit
+approval, named reviewer and supplied review time, non-blocking validation, target
+ThreatContext identity, and explicit accepted/rejected assertion sets.
+
+Only accepted assertions populate `ThreatContext`. Unknown, rejected, unsupported,
+sensitive, or forbidden material is excluded. Provenance records the document,
+interpretation, approval, reviewer, and revision chain. Raw prompts, provider
+secrets, and copied source text are not carried forward.
+
+## Fail-closed and adversarial handling
+
+Blocking findings cover forbidden fields, unknown or malformed catalog IDs,
+ungrounded activity or technology, missing evidence, prompt-injection output,
+external model knowledge, sensitive output, input/contract mismatches, and missing
+approval. Input findings identify possible secrets, personal data, or adversarial
+instructions for review; Phase 4A intentionally does not implement full DLP.
+Source instructions are always evidence content and can never alter authority
+policy or authorize an external action.
+
+`source_reference`, source identity, and `published_at` originate from the
+caller-supplied `ThreatAdvisoryDocument` and are copied by the adapter. They do not
+require model-generated evidence assertions. Instead, Phase 4A compares them
+directly with the document metadata and blocks any mismatch, while document ID,
+content hash, and provenance hash protect input identity.
+
+## Identity and reproducibility
+
+Document and interpretation IDs are caller-supplied or derived from stable identity
+components. Interpretation identity does not hash the complete output;
+`interpretation_revision` is separate. Provider, model, model version, prompt,
+contract, policy, generation-parameter identity, and input hash are retained. All
+contract models serialize with sorted keys and canonical collection ordering,
+without implicit timestamps or random identifiers.
+
+## Phase 4B provider adapter
+
+`ThreatInterpretationProvider` is provider-neutral. The first implementation uses
+the OpenAI Responses API with strict JSON Schema output, no tools, no requested or
+retained reasoning trace, an explicit timeout, `store=false`, and bounded retries
+for transient failures only. Provider-specific imports remain isolated.
+
+The deterministic request builder supplies only:
+
+- trusted contract and authority-policy rules;
+- active threat-scenario, technique, and attack-path IDs and names; and
+- the caller-supplied advisory metadata and content, clearly labeled untrusted.
+
+It never sends CIS controls, Mandatory output, priority output, environment secrets,
+or customer data by default. The live catalog still validates every returned ID.
+Markdown, free text, malformed JSON, schema mismatches, forbidden fields, and
+blocking Phase 4A findings fail closed without repair.
+
+When validation blocks output, `ProviderContractValidationError` carries structured
+finding codes/messages plus safe canonical evidence-binding diagnostics. These may
+include proposed canonical values, assertion types, locators, support types, and
+inference flags, but never the API key, advisory content, full raw response, or
+reasoning trace. Successful artifacts remain unchanged.
+
+Credentials come only from `OPENAI_API_KEY` or an explicit in-memory caller value.
+They are not logged, serialized, placed in provenance, or included in errors.
+Provider privacy policy records only caller-configured region/retention identifiers,
+training-use permission, and whether sensitive or customer data is allowed; it does
+not claim provider guarantees. The default rejects potential secrets and personal
+data before any request.
+
 ## Operator workflow
 
 1. Obtain advisory text out of band and save it locally.

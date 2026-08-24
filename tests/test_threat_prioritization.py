@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from cis_pdf2csv.mandatory.pipeline import assess_controls
 from cis_pdf2csv.mandatory.schema import (
     MandatoryAssessment,
     OverlapType,
@@ -13,6 +14,7 @@ from cis_pdf2csv.mandatory.schema import (
 from cis_pdf2csv.mandatory.schema import (
     Proposal as MandatoryProposal,
 )
+from cis_pdf2csv.schema import ControlRecord
 from cis_pdf2csv.security_knowledge.boundaries import ApplicabilityMode
 from cis_pdf2csv.security_knowledge.catalog import SECURITY_KNOWLEDGE_CATALOG
 from cis_pdf2csv.security_knowledge.evidence import EvidenceItem, EvidenceType
@@ -21,6 +23,9 @@ from cis_pdf2csv.security_knowledge.mitigation import (
     MitigationMapping,
     MitigationRole,
     MitigationStrength,
+)
+from cis_pdf2csv.security_knowledge.phase1_mapping_adapter import (
+    adapt_phase1_assessments_to_mappings,
 )
 from cis_pdf2csv.security_knowledge.provenance import Confidence, LifecycleStatus
 from cis_pdf2csv.security_knowledge.schema import Proposal
@@ -486,3 +491,205 @@ def test_catalog_is_unmodified_and_mandatory_does_not_import_phase3() -> None:
         and "ThreatRelevance" not in path.read_text()
         for path in mandatory_dir.glob("*.py")
     )
+
+
+def test_unresolved_boundary_supporting_mapping_starts_and_stays_normal() -> None:
+    source = identity("PRECISION.1")
+    explicit_technique = context().model_copy(
+        update={"attack_path_ids": (), "technique_ids": ("TEC-003",)}
+    )
+    item = resolution(explicit_technique)
+    projected, results = overlay(
+        (item,),
+        (
+            mapping(
+                source,
+                100,
+                role=BoundaryRole.SUPPORTING_HARDENING,
+                strength=MitigationStrength.SUPPORTING,
+                attack_path_id="AP-004",
+                boundary_id="BND-REMOTE-MANAGEMENT",
+                technique_id="TEC-002",
+            ),
+        ),
+        (assessment(source),),
+    )
+    projection = projected.projections[0]
+    assert projection.context_technique_ids == ("TEC-003",)
+    assert projection.derived_technique_ids == ("TEC-002", "TEC-004")
+    assert projection.causal_bases == ()
+    assert results[0].threat_relevance == ThreatRelevance.NORMAL
+    assert "THREAT_PROJECTION_BOUNDARY_NOT_RESOLVED" in {
+        finding.code for finding in results[0].findings
+    }
+    assert "THREAT_PRIORITY_CAUSAL_BASIS_REQUIRED" in {
+        finding.code for finding in results[0].findings
+    }
+
+
+def test_exact_explicit_technique_mapping_is_a_causal_basis_without_fabrication() -> (
+    None
+):
+    source = identity("PRECISION.2")
+    item = resolution(
+        context().model_copy(
+            update={"attack_path_ids": (), "technique_ids": ("TEC-003",)}
+        )
+    )
+    projected, results = overlay(
+        (item,),
+        (
+            mapping(
+                source,
+                101,
+                role=BoundaryRole.SUPPORTING_HARDENING,
+                strength=MitigationStrength.SUPPORTING,
+                attack_path_id="AP-004",
+                boundary_id="BND-REMOTE-MANAGEMENT",
+                technique_id="TEC-003",
+            ),
+        ),
+        (assessment(source),),
+    )
+    assert [basis.value for basis in projected.projections[0].causal_bases] == [
+        "explicit_context_technique"
+    ]
+    assert results[0].threat_relevance == ThreatRelevance.ELEVATED
+    assert results[0].context_technique_ids == ("TEC-003",)
+    assert results[0].derived_technique_ids == ("TEC-002", "TEC-004")
+
+
+def test_valid_and_weak_paths_are_independent_in_aggregate_rationale() -> None:
+    source = identity("PRECISION.3")
+    item = resolution(
+        context().model_copy(
+            update={"attack_path_ids": (), "technique_ids": ("TEC-003",)}
+        )
+    )
+    _, results = overlay(
+        (item,),
+        (
+            mapping(
+                source,
+                102,
+                attack_path_id="AP-003",
+                boundary_id="BND-NETWORK-SMB-SESSION",
+                technique_id="TEC-003",
+            ),
+            mapping(
+                source,
+                103,
+                role=BoundaryRole.SUPPORTING_HARDENING,
+                strength=MitigationStrength.SUPPORTING,
+                attack_path_id="AP-004",
+                boundary_id="BND-REMOTE-MANAGEMENT",
+                technique_id="TEC-002",
+            ),
+        ),
+        (assessment(source),),
+    )
+    result = results[0]
+    by_mapping = {driver.mapping_id: driver for driver in result.drivers}
+    assert by_mapping["MAP-102"].relevance == ThreatRelevance.HIGH
+    assert by_mapping["MAP-103"].relevance == ThreatRelevance.NORMAL
+    assert result.threat_relevance == ThreatRelevance.HIGH
+    assert result.rationale.startswith(
+        f"Aggregate High relevance is determined by {item.threat_context_id}@1|MAP-102."
+    )
+
+
+def test_windows_remote_service_smoke_precision_regression() -> None:
+    controls_path = Path(__file__).parents[1] / "controls-windows-server-2025-l1.jsonl"
+    controls = [
+        ControlRecord.model_validate_json(line)
+        for line in controls_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assessments = assess_controls(controls)
+    mappings = adapt_phase1_assessments_to_mappings(controls, assessments).mappings
+    smoke_context = ThreatContext(
+        threat_context_id="THRCTX-SYNTH-REMOTE-SERVICE-PRECISION",
+        title="Synthetic remote-service activity",
+        description="Invented remote-service targeting for deterministic testing.",
+        source_type=ThreatSourceType.ANALYST,
+        source_name="Synthetic test authority",
+        source_reference="SYNTH-REMOTE-SERVICE-PRECISION",
+        valid_from=NOW - timedelta(days=1),
+        valid_until=NOW + timedelta(days=1),
+        confidence=Confidence.LOW,
+        severity=ThreatSeverity.MEDIUM,
+        lifecycle_status=LifecycleStatus.ACTIVE,
+        threat_scenario_ids=("TS-101",),
+        technique_ids=("TEC-003",),
+        affected_technology_families=("Windows",),
+        applicability_scope=ThreatApplicabilityScope.TECHNOLOGY_FAMILY,
+        provenance=ThreatContextProvenance(
+            authority="Synthetic test authority",
+            creation_method="invented approved fixture",
+            model_version="1.0",
+            object_version="1",
+        ),
+    )
+    resolved = resolve_threat_context(
+        smoke_context, SECURITY_KNOWLEDGE_CATALOG, at_time=NOW
+    )
+    projected = project_threat_resolutions(
+        (resolved,), mappings, assessments, catalog=SECURITY_KNOWLEDGE_CATALOG
+    )
+    results = prioritize_threat_projections(projected.projections)
+    by_id = {item.control_id: item for item in results}
+
+    strong = {
+        "18.10.57.3.9.4",
+        "2.2.6",
+        "18.10.89.1.1",
+        "18.10.89.1.2",
+        "2.3.8.1",
+        "2.3.9.2",
+        "9.2.1",
+        "9.2.2",
+    }
+    weak = {
+        "18.10.57.3.3.3",
+        "18.7.7",
+        "2.3.10.7",
+        "2.3.10.8",
+        "9.2.4",
+        "9.2.5",
+    }
+    assert all(
+        by_id[control_id].threat_relevance == ThreatRelevance.ELEVATED
+        for control_id in strong
+    )
+    assert all(
+        by_id[control_id].threat_relevance == ThreatRelevance.NORMAL
+        for control_id in weak
+    )
+    assert by_id["18.10.57.3.9.4"].context_technique_ids == ("TEC-003",)
+    assert by_id["18.10.57.3.9.4"].derived_technique_ids == (
+        "TEC-002",
+        "TEC-004",
+    )
+    assert by_id["9.2.4"].context_technique_ids == ()
+    assert by_id["9.2.4"].derived_technique_ids == ("TEC-004",)
+    firewall = by_id["9.2.1"]
+    firewall_by_path = {
+        driver.attack_path_ids[0]: driver for driver in firewall.drivers
+    }
+    assert firewall_by_path["AP-003"].relevance == ThreatRelevance.NORMAL
+    assert firewall_by_path["AP-007"].relevance == ThreatRelevance.ELEVATED
+    assert firewall_by_path["AP-007"].context_scenario_ids == ("TS-101",)
+    assert firewall_by_path["AP-007"].derived_technique_ids == ("TEC-004",)
+    assert firewall.rationale.startswith(
+        "Aggregate Elevated relevance is determined by "
+        f"{firewall_by_path['AP-007'].driver_id}."
+    )
+    summary = summarize_threat_priority(results)
+    assert summary.total_projected_controls == 35
+    assert (summary.normal, summary.elevated, summary.high, summary.critical) == (
+        16,
+        19,
+        0,
+        0,
+    )
+    assert summary.review_capped_controls == 19

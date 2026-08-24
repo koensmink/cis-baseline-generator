@@ -19,7 +19,7 @@ from ..mitigation import (
 )
 from ..provenance import Confidence, LifecycleStatus
 from ..schema import Proposal
-from .resolution import ResolutionStatus, ThreatResolution
+from .resolution import RelationshipSource, ResolutionStatus, ThreatResolution
 from .schema import ThreatApplicabilityScope
 
 
@@ -27,6 +27,11 @@ class ProjectionEligibility(str, Enum):
     ELIGIBLE = "eligible"
     REVIEW_REQUIRED = "review_required"
     INELIGIBLE = "ineligible"
+
+
+class ProjectionCausalBasis(str, Enum):
+    RESOLVED_BOUNDARY = "resolved_boundary"
+    EXPLICIT_CONTEXT_TECHNIQUE = "explicit_context_technique"
 
 
 class ProjectionFinding(BaseModel):
@@ -55,6 +60,12 @@ class ThreatControlProjection(BaseModel):
     attack_path_ids: tuple[str, ...]
     boundary_ids: tuple[str, ...]
     technique_ids: tuple[str, ...]
+    context_technique_ids: tuple[str, ...]
+    derived_technique_ids: tuple[str, ...]
+    context_scenario_ids: tuple[str, ...]
+    derived_scenario_ids: tuple[str, ...]
+    path_relationship_source: RelationshipSource
+    causal_bases: tuple[ProjectionCausalBasis, ...]
     capability_id: str
     security_effect: str
     mitigation_role: MitigationRole
@@ -228,6 +239,18 @@ def project_threat_resolutions(
             )
             continue
         for resolution in sorted_resolutions:
+            explicit_technique_ids = {
+                item.object_id
+                for item in resolution.techniques
+                if item.relationship_source
+                == RelationshipSource.EXPLICIT_THREAT_CONTEXT_REFERENCE
+            }
+            explicit_scenario_ids = {
+                item.object_id
+                for item in resolution.threat_scenarios
+                if item.relationship_source
+                == RelationshipSource.EXPLICIT_THREAT_CONTEXT_REFERENCE
+            }
             path_by_id = {
                 path.attack_path.object_id: path for path in resolution.resolution_paths
             }
@@ -262,10 +285,24 @@ def project_threat_resolutions(
                 eligibility = ProjectionEligibility.REVIEW_REQUIRED
             projection_findings.extend(eligibility_findings)
             path_techniques = {item.object_id for item in resolved_path.techniques}
+            path_scenarios = {item.object_id for item in resolved_path.threat_scenarios}
+            context_technique_ids = tuple(
+                sorted(path_techniques & explicit_technique_ids)
+            )
+            derived_technique_ids = tuple(
+                sorted(path_techniques - explicit_technique_ids)
+            )
+            context_scenario_ids = tuple(sorted(path_scenarios & explicit_scenario_ids))
+            derived_scenario_ids = tuple(sorted(path_scenarios - explicit_scenario_ids))
             mapping_techniques = set(mapping.technique_ids)
             technique_ids = tuple(
                 sorted(mapping_techniques & path_techniques or path_techniques)
             )
+            causal_bases: list[ProjectionCausalBasis] = []
+            if boundary_ids:
+                causal_bases.append(ProjectionCausalBasis.RESOLVED_BOUNDARY)
+            if mapping_techniques & set(context_technique_ids):
+                causal_bases.append(ProjectionCausalBasis.EXPLICIT_CONTEXT_TECHNIQUE)
             projections.append(
                 ThreatControlProjection(
                     source_identity=identity,
@@ -281,6 +318,12 @@ def project_threat_resolutions(
                     attack_path_ids=(mapping.attack_path_id,),
                     boundary_ids=boundary_ids,
                     technique_ids=technique_ids,
+                    context_technique_ids=context_technique_ids,
+                    derived_technique_ids=derived_technique_ids,
+                    context_scenario_ids=context_scenario_ids,
+                    derived_scenario_ids=derived_scenario_ids,
+                    path_relationship_source=resolved_path.attack_path.relationship_source,
+                    causal_bases=tuple(causal_bases),
                     capability_id=mapping.capability_id,
                     security_effect=mapping.enforced_sub_boundary,
                     mitigation_role=mapping.mitigation_role,
@@ -314,6 +357,7 @@ def project_threat_resolutions(
 
 __all__ = [
     "ControlProjectionResult",
+    "ProjectionCausalBasis",
     "ProjectionEligibility",
     "ProjectionFinding",
     "ThreatControlProjection",

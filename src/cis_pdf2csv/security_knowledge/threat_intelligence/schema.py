@@ -96,7 +96,7 @@ class ThreatContext(BaseModel):
             return False
         if self.valid_from is not None and at_time < self.valid_from:
             return False
-        return self.valid_until is None or at_time <= self.valid_until
+        return self.valid_until is None or at_time < self.valid_until
 
     def to_deterministic_json(self) -> str:
         """Serialize canonically, including canonical ordering for set-like fields."""

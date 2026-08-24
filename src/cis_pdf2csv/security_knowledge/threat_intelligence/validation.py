@@ -83,7 +83,7 @@ def validate_threat_context(
         findings.append(_finding("THREAT_CONTEXT_NO_EVIDENCE", FindingLevel.WARNING, context, "No supporting threat evidence is attached.", "Obtain evidence or retain for analyst review."))
     if context.applicability_scope == ThreatApplicabilityScope.UNRESOLVED:
         findings.append(_finding("THREAT_CONTEXT_APPLICABILITY_UNRESOLVED", FindingLevel.WARNING, context, "Threat applicability is unresolved.", "Resolve generic applicability before future priority use."))
-    if context.valid_until is not None and _aware(context.valid_until) and context.valid_until < at_time:
+    if context.valid_until is not None and _aware(context.valid_until) and context.valid_until <= at_time:
         findings.append(_finding("THREAT_CONTEXT_EXPIRED", FindingLevel.INFO, context, "The validity window has expired; the context remains historical and readable.", "Exclude from active future resolution unless historical mode is used."))
         if context.lifecycle_status == LifecycleStatus.ACTIVE:
             findings.append(_finding("THREAT_CONTEXT_LIFECYCLE_CONTRADICTION", FindingLevel.ERROR, context, "An active lifecycle status contradicts the expired validity window.", "Deprecate or supersede the context."))

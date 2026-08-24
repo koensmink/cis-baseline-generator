@@ -101,8 +101,8 @@ data before any request.
 1. Obtain advisory text out of band and save it locally.
 2. Run `cis-threat-interpret` with a structured-output-capable model.
 3. Inspect `proposed-threat.json` and its summary.
-4. Perform human approval and explicit conversion using the Phase 4A gate.
-5. Export the approved `ThreatContext` separately.
+4. Run `cis-threat-approve` and explicitly accept or reject each material assertion.
+5. Export the approved `ThreatContext`; rejection or revision creates no context.
 6. Run `cis-threat-analyze` with that approved context.
 
 ```bash
@@ -127,6 +127,51 @@ Audit metadata retains provider/model identity, prompt and contract versions,
 generation-parameter identity, input and vocabulary hashes, request ID, and raw
 response hash. Deterministic behavior resumes after strict parsing at the Phase 4A
 boundary. No proposal is approved or converted automatically.
+
+## Phase 4C human approval
+
+`cis-threat-approve` is a provider-free orchestration layer over the existing
+`ThreatInterpretationApproval` model and
+`build_threat_context_from_approved_interpretation()` gate. It performs no network
+access, requires no API key, and does not import provider, Mandatory, resolution, or
+prioritization execution code.
+
+```bash
+cis-threat-approve proposed-threat.json \
+  --reviewer "security-engineer" \
+  --approval approved \
+  --reviewed-at 2026-08-24T12:30:00Z \
+  --accept A-SOURCE \
+  --accept A-TECHNIQUE \
+  --reject A-SPECULATIVE \
+  --rationale "Reviewed against invented local evidence" \
+  -o threat-context.json
+```
+
+Approval never defaults to `approved`, and there is no accept-all operation. Every
+material assertion—activity, confidence/severity evidence, technology/applicability,
+catalog IDs, temporal claims, and source-reference claims—must be explicitly
+accepted or rejected before conversion. Unknown or overlapping decisions fail as
+input errors. Blocking Phase 4A findings and invalid current catalog references
+cannot be overridden by a reviewer.
+
+Narrow corrections support confidence, severity, validity bounds, and applicability
+scope. Each is recorded as an `ApprovalModification`. Confidence remains capped by
+validated interpretation confidence; severity never implies activity. Activity
+state is not modifiable because the current `ThreatContext` deliberately does not
+carry that field and Phase 3 semantics remain unchanged.
+
+For an approved decision the command writes `threat-context.json`,
+`threat-context-approval.json`, and `threat-context-approval-summary.json`. Rejected
+and `needs_revision` decisions write only the approval and summary artifacts. The
+approval record retains proposal, document, raw-response, contract, prompt,
+interpretation, validation, reviewer, decision, modification, and timestamp
+identities without retaining advisory content, provider secrets, or reasoning.
+
+`--reviewed-at` is optional for operator convenience and otherwise uses current UTC.
+Supplying it explicitly is required for byte-identical replay. Exit code 0 means a
+valid review was recorded, 2 means input/schema failure, and 4 means an approved
+decision could not pass the conversion gate.
 
 For a manual live smoke test, use invented non-sensitive advisory text, configure a
 model that supports strict structured output, run the command above, and inspect

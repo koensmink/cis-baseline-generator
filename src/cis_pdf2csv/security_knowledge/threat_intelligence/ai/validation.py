@@ -217,9 +217,23 @@ def _validate_catalog_ids(item: ProposedThreatInterpretation, catalog: SecurityK
                 findings.append(_finding("AI_INTERPRETATION_INACTIVE_CATALOG_ID", AIContractFindingSeverity.WARNING, item.interpretation_id, f"Catalog identifier {identifier} is {index[identifier].lifecycle_status} and requires review."))
 
 
+def validate_interpretation_catalog_references(
+    interpretation: ProposedThreatInterpretation,
+    catalog: SecurityKnowledgeCatalog,
+) -> tuple[AIContractFinding, ...]:
+    findings: list[AIContractFinding] = []
+    _validate_catalog_ids(interpretation, catalog, findings)
+    return _sorted(findings)
+
+
 def _minimum(left: Confidence, right: Confidence) -> Confidence:
     order = {Confidence.LOW: 0, Confidence.MEDIUM: 1, Confidence.HIGH: 2}
     return left if order[left] <= order[right] else right
 
 
-__all__ = ["validate_advisory_document", "validate_interpretation", "validate_interpretation_payload"]
+__all__ = [
+    "validate_advisory_document",
+    "validate_interpretation",
+    "validate_interpretation_catalog_references",
+    "validate_interpretation_payload",
+]

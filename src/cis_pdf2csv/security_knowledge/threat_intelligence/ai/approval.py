@@ -18,6 +18,7 @@ from .schema import (
     InterpretationValidationResult,
     ProposedThreatInterpretation,
     ThreatAdvisoryDocument,
+    ThreatAdvisoryReference,
     ThreatInterpretationApproval,
 )
 
@@ -36,10 +37,26 @@ _MODIFIABLE = {
     "proposed_applicability_scope",
 }
 
+_MATERIAL_ASSERTION_TYPES = {
+    "activity_state",
+    "affected_technology_family",
+    "attack_path_id",
+    "confidence",
+    "observed_at",
+    "published_at",
+    "severity",
+    "source_reference",
+    "targeted_asset_class",
+    "technique_id",
+    "threat_scenario_id",
+    "valid_from",
+    "valid_until",
+}
+
 
 def build_threat_context_from_approved_interpretation(
     interpretation: ProposedThreatInterpretation,
-    document: ThreatAdvisoryDocument,
+    document: ThreatAdvisoryDocument | ThreatAdvisoryReference,
     approval: ThreatInterpretationApproval,
     validation: InterpretationValidationResult,
 ) -> ThreatContext:
@@ -166,6 +183,17 @@ def validate_interpretation_approval(
         reasons.append("reviewer identity and review time are required")
     if not approval.threat_context_id:
         reasons.append("target ThreatContext identity is required")
+    assertion_ids = {item.assertion_id for item in interpretation.evidence_assertions}
+    accepted = set(approval.accepted_assertion_ids)
+    rejected = set(approval.rejected_assertion_ids)
+    if accepted & rejected:
+        reasons.append("the same assertion cannot be accepted and rejected")
+    unknown = sorted((accepted | rejected) - assertion_ids)
+    if unknown:
+        reasons.append(f"approval references unknown assertions: {', '.join(unknown)}")
+    undecided = sorted(material_assertion_ids(interpretation) - accepted - rejected)
+    if approval.status == ApprovalStatus.APPROVED and undecided:
+        reasons.append(f"material assertions remain undecided: {', '.join(undecided)}")
     if not reasons:
         return ()
     return (
@@ -176,6 +204,18 @@ def validate_interpretation_approval(
             message="; ".join(sorted(reasons)) + ".",
         ),
     )
+
+
+def material_assertion_ids(
+    interpretation: ProposedThreatInterpretation,
+) -> set[str]:
+    return {
+        item.assertion_id
+        for item in interpretation.evidence_assertions
+        if item.assertion_type in _MATERIAL_ASSERTION_TYPES
+        or item.inference_required
+        or item.confidence != Confidence.HIGH
+    }
 
 
 def _datetime_modification(
@@ -193,5 +233,6 @@ def _minimum(left: Confidence, right: Confidence) -> Confidence:
 __all__ = [
     "InterpretationApprovalError",
     "build_threat_context_from_approved_interpretation",
+    "material_assertion_ids",
     "validate_interpretation_approval",
 ]

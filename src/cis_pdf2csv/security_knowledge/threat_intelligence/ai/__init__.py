@@ -3,6 +3,7 @@
 from .approval import (
     InterpretationApprovalError,
     build_threat_context_from_approved_interpretation,
+    material_assertion_ids,
     validate_interpretation_approval,
 )
 from .contract import (
@@ -26,11 +27,13 @@ from .schema import (
     ProposedThreatInterpretation,
     ThreatActivityState,
     ThreatAdvisoryDocument,
+    ThreatAdvisoryReference,
     ThreatInterpretationApproval,
 )
 from .validation import (
     validate_advisory_document,
     validate_interpretation,
+    validate_interpretation_catalog_references,
     validate_interpretation_payload,
 )
 
@@ -53,13 +56,16 @@ __all__ = [
     "ProposedThreatInterpretation",
     "ThreatActivityState",
     "ThreatAdvisoryDocument",
+    "ThreatAdvisoryReference",
     "ThreatInterpretationApproval",
     "build_document_id",
     "build_interpretation_id",
     "build_threat_context_from_approved_interpretation",
     "content_hash",
+    "material_assertion_ids",
     "validate_advisory_document",
     "validate_interpretation",
     "validate_interpretation_approval",
+    "validate_interpretation_catalog_references",
     "validate_interpretation_payload",
 ]

@@ -73,6 +73,19 @@ class ThreatAdvisoryDocument(DeterministicModel):
     provenance: AdvisoryDocumentProvenance
 
 
+class ThreatAdvisoryReference(DeterministicModel):
+    """Content-free document identity retained by review artifacts."""
+
+    document_id: str = Field(min_length=1)
+    source_type: ThreatSourceType
+    source_name: str = Field(min_length=1)
+    source_reference: str = Field(min_length=1)
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    published_at: datetime | None = None
+    retrieved_at: datetime | None = None
+    provenance: AdvisoryDocumentProvenance
+
+
 class InterpretationEvidenceAssertion(DeterministicModel):
     assertion_id: str = Field(min_length=1)
     assertion_type: str = Field(min_length=1)
@@ -195,5 +208,6 @@ __all__ = [
     "ProposedThreatInterpretation",
     "ThreatActivityState",
     "ThreatAdvisoryDocument",
+    "ThreatAdvisoryReference",
     "ThreatInterpretationApproval",
 ]

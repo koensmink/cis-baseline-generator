@@ -1,93 +1,135 @@
 # Threat-Informed Control Prioritization
 
-## Purpose and phase boundary
+## Purpose and compatibility boundary
 
-Phase 2 adds deterministic resolution from a `ThreatContext` to existing, source-independent Security Knowledge Catalog concepts. It answers which existing security knowledge is relevant to an asserted threat context. It does not score, rank, promote, demote, or classify any CIS recommendation.
+Phase 3 adds a deterministic, advisory threat-relevance overlay. It answers which already-known source recommendations are especially relevant to resolved threat knowledge and why. It never changes the base Mandatory proposal.
 
-The production Mandatory engine, Candidate Mandatory criteria, Review Required and Regular Control semantics, boundary completeness, benchmark-family adapters, shadow mode, parser, Intune mapping, CLI, and Security Knowledge Catalog remain independent and unchanged. When no context is evaluated, application behavior is unchanged.
+The production Mandatory engine, Candidate Mandatory criteria, Review Required and Regular Control semantics, boundary completeness, benchmark-family adapters, shadow mode, parser, Intune mapping, CLI, CSV schemas, and Security Knowledge Catalog remain independent and unchanged. With no threat input, production behavior and output are identical.
 
-## Phase 2 architecture
+No Phase 1, 2, or 3 code uses AI, live feeds, network access, keyword inference, or customer-vulnerability inference.
+
+## Phase 3 architecture
 
 ```text
-ThreatContext
-     ↓
-Deterministic Knowledge Resolver
-     ├─ ThreatScenario
-     ├─ AttackTechnique
-     ├─ AttackPath
-     ├─ SecurityBoundary
-     └─ SecurityOutcome
-
-Base Mandatory Engine (separate and unchanged)
+Base Mandatory Engine
+        │
+        └────────────── base_proposal
+                         │
+ThreatContext            │
+      ↓                  │
+ThreatResolution         │
+      ↓                  │
+Mitigation Projection    │
+      ↓                  │
+Threat Relevance Overlay ┘
+      ↓
+Advisory prioritization
 ```
 
-The resolver is bounded within `cis_pdf2csv.security_knowledge.threat_intelligence`. Production classification paths do not import or invoke it. It builds deterministic inverse indexes in memory and never adds reverse threat-context identifiers to catalog objects.
+Phase 3 is bounded by `projection.py` and `prioritization.py` inside `cis_pdf2csv.security_knowledge.threat_intelligence`. Production paths do not import or invoke these modules.
 
-## ThreatContext identity and revision
-
-The stable `threat_context_id` identifies the context independently of its content. It is not a full-content hash. Resolution output separately retains the context provenance `object_version` as `threat_context_revision`. External advisories and evidence identifiers remain source/evidence references rather than context identity.
-
-## Resolution statuses
-
-- `resolved`: an active context has an unambiguous valid chain containing active threat scenario, technique, attack path, boundary, and outcome concepts.
-- `partially_resolved`: at least one valid knowledge relationship is retained, but a non-ambiguous chain gap remains, such as an unattached technique or a path without a boundary or outcome.
-- `review_required`: an inactive catalog reference or lifecycle successor choice needs human judgment. This is a knowledge-resolution status, not the Mandatory engine's Review Required classification.
-- `unresolved`: no reliable knowledge relationship can be established, or an active-participation blocker prevents resolution.
-- `inactive`: a valid context is not active at the explicitly supplied evaluation instant.
-
-These statuses never classify controls.
-
-## Explicit-reference precedence and traversal
-
-Resolution uses only identifiers asserted by the context and authoritative catalog relationships:
-
-1. Explicit active AttackPath references are resolved first. Their scenarios, techniques, boundaries, and outcomes are followed exactly as modeled.
-2. Explicit active AttackTechnique references use a reconstructed `technique_id → AttackPath` index. Every active match is preserved.
-3. Explicit active ThreatScenario references use a reconstructed `threat_scenario_id → AttackPath` index. Every active match is preserved.
-4. Prose or evidence without catalog identifiers is not keyword-matched or semantically inferred; it remains unresolved in Phase 2.
-
-Multiple valid matching paths are not ambiguous and are never arbitrarily collapsed. Missing links are not invented. Boundary resolution names relevant boundaries only; it does not evaluate CIS `BoundarySet` completeness. Outcome resolution retains technical `SecurityOutcome` objects only and does not infer business risk or create customer-specific risks.
-
-## Evidence lineage and deterministic output
-
-Each resolved reference records its object ID and type, relationship source, originating context ID, conservative confidence, and compact source/evidence identifiers. Full evidence blobs are not copied into every relationship.
-
-Results use immutable Pydantic models, canonical ordering for all object collections, findings, and resolution paths, sorted JSON keys, compact separators, and no implicit timestamps. Equivalent contexts and catalogs therefore produce byte-stable JSON regardless of input identifier ordering. The catalog is never mutated.
-
-## Confidence propagation
-
-Resolution reuses the existing `High`, `Medium`, and `Low` values and introduces no numeric score. A relationship's confidence is the least-confident value among the originating context, its attack path where applicable, and catalog technique/scenario confidence where modeled. Aggregate resolution confidence is the least-confident resolved relationship. It can never exceed context confidence. Confidence does not rank controls.
-
-## Active time and lifecycle behavior
-
-Validity is the half-open interval `[valid_from, valid_until)`: `valid_from` is inclusive and `valid_until` is exclusive. Evaluation requires an explicit timezone-aware instant and never reads the system clock. Expired and future contexts are inactive in normal mode and do not produce active resolution. Invalid or timezone-incomplete temporal windows are unresolved participation blockers.
-
-Historical mode is explicit in both the resolver call and output. It may retain deprecated or superseded objects for historical analysis. It does not silently rewrite catalog references.
-
-## Successor handling
-
-Normal resolution uses active catalog objects only. An explicit deprecated or superseded reference is preserved in a structured finding and sets `review_required`; it is not included as an active resolved object. Findings distinguish deprecated references, superseded references with one active successor suggestion, multiple active successor candidates, and no active successor. Candidate IDs and the original lifecycle reason are retained, but replacement always requires a later human decision.
-
-## Applicability boundary
-
-Resolution retains affected technology families, targeted asset classes, and threat applicability scope. These describe the threat assertion, not CIS recommendation applicability and not whether a customer's environment is affected. An unresolved applicability scope is a participation blocker when active resolution cannot safely determine scope; the resolver does not guess between knowledge branches.
-
-## Coverage reporting
-
-The deterministic aggregate report counts the five resolution statuses plus referenced techniques, resolved attack paths, boundaries, outcomes, and unresolved external/catalog references. It contains no CIS recommendation or control counts.
-
-## Why no control priority exists yet
-
-Phase 2 stops at reusable security knowledge. It does not project threat relevance onto mitigation mappings or controls, so it cannot change Mandatory classification or produce a priority overlay. Governance workflow and analyst-approval rules for control-priority participation are also outside this phase.
-
-Phase 3 is future work and is not implemented:
+The only control join is the existing atomic `MitigationMapping`:
 
 ```text
 ThreatResolution
-      ↓
-Control/Boundary Mitigation Projection
-      ↓
-Threat-Informed Priority Overlay
+  → resolved AttackPath and Boundary
+  → active MitigationMapping
+  → composite SourceIdentity
+  → immutable base Mandatory assessment
+  → advisory overlay
 ```
 
-Phase 3 must define projection semantics, conflict handling, applicability and approval rules, overlay representation, and regression safeguards before any control-level output is introduced. Phase 4 may later address unstructured interpretation and operational ingestion; Phase 2 uses no AI, live feeds, or network access.
+There is no direct ThreatContext-to-control mapping and no second control-to-boundary system. Title-only matches and controls without mappings cannot participate.
+
+## Phase 2 resolution contract
+
+Phase 2 resolves explicit catalog IDs using path, technique, and scenario precedence. It retains all valid paths, boundaries, outcomes, evidence lineage, conservative confidence, and deterministic ordering. It performs no free-text interpretation. Validity is `[valid_from, valid_until)` and historical mode is explicit. Deprecated and superseded references are never silently replaced.
+
+The stable `threat_context_id` remains separate from its provenance `object_version`; Phase 3 uses both as a deterministic resolution driver identity.
+
+## Control mitigation projection
+
+`ThreatControlProjection` retains composite `SourceIdentity`, control ID/title, base proposal, mapping ID, context/resolution IDs, intersecting path/boundary/technique IDs, capability and enforced security effect, mitigation role and strength, boundary role, threat and control applicability, confidence, overlap metadata, eligibility, and structured findings.
+
+A projection requires an existing mapping whose AttackPath occurs in a `ThreatResolution`. A missing resolved boundary is retained as an explicit review-capped projection, never guessed. Inactive mappings are ineligible. Below-High mapping confidence, conditional/unresolved applicability, or non-resolved knowledge status remains visible but is review-capped.
+
+## Base proposal immutability
+
+The overlay copies `base_proposal` verbatim from the scoped production assessment. It never writes a new `proposal`. Therefore:
+
+- Candidate Mandatory remains Candidate Mandatory;
+- Review Required remains Review Required; and
+- Regular Control remains Regular Control, including when threat relevance is High.
+
+Threat relevance is an advisory dimension, not a classifier cutover.
+
+## Relevance and confidence
+
+Threat relevance and priority confidence are independent. Relevance uses four non-numeric values:
+
+- `Normal`: an intersecting mapped control is tuning, information-hiding, operational, inactive, or otherwise ineligible for escalation. Controls without any intersection are omitted from the optional overlay.
+- `Elevated`: a valid intersection exists but is supporting/detection-oriented, conditional, below High confidence, partially resolved, boundary-incomplete, or review-capped.
+- `High`: requires a fully resolved active knowledge chain, High conservative confidence, a resolved path and boundary, universal benchmark applicability, no participation blocker, a preventive/restrictive/isolating/protective mapping, and a primary, complementary-core, or prerequisite role.
+- `Critical`: reserved for the High conditions plus a future structured immediate-exploitation/activity driver.
+
+Phase 1 has no structured exploitation/activity state. Phase 3 therefore deliberately caps at High. Critical severity alone, prose, incident-like wording, or evidence type cannot produce Critical relevance.
+
+Confidence reuses `High`, `Medium`, and `Low`. Per-driver confidence is the minimum of `ThreatResolution.confidence` and `MitigationMapping.confidence`; Phase 2 already guarantees resolution confidence cannot exceed ThreatContext confidence. No numeric or hidden weighted score exists.
+
+## Advisory actions
+
+Actions are separate from relevance:
+
+- Normal → `none`;
+- Elevated → `monitor`, or `review` when an explicit cap requires analyst judgment;
+- High → `prioritize`;
+- Critical → `urgent_prioritize` (currently unreachable).
+
+Mandatory, Required, Failed, and Noncompliant are not overlay actions.
+
+## Role-based ceilings
+
+- Standalone primary, complementary-core, and prerequisite preventive effects may reach High.
+- Supporting hardening is capped at Elevated.
+- Detection, investigation, and recovery are capped at Elevated.
+- Fine-tuning, information-hiding, and operational roles have a Normal ceiling.
+
+These rules use generic model roles and contain no Windows-specific semantics. Detection controls may become visible, but generic logging is not included merely because a path exists; it still needs an authoritative mapping.
+
+## Applicability
+
+Threat applicability, source/control applicability, and customer deployment applicability remain distinct. Universal benchmark applicability may support High. `mandatory_when_deployed` and unresolved applicability are projected but capped at Elevated with `review`; the resolver never assumes that a customer's feature is deployed or that the environment is vulnerable.
+
+## Multiple threats and paths
+
+Every mapping/context pair becomes a separate `ThreatPriorityDriver` with its own path, boundary, effect, role, relevance, rationale, confidence, and caps. Aggregation preserves all drivers and selects the highest valid relevance without summing scores. An incomplete driver does not invalidate an independently complete driver. Distinct paths remain distinct assertions.
+
+## Equivalence and overlap
+
+Phase 3 reuses existing role, strength, overlap, related-control, security-effect, scope, and source-identity evidence. A broader primary mapping may reach High while an explicitly supporting narrower alternative remains Elevated. Multiple primary mappings claiming the same boundary, security effect, applicability, and resolution are ambiguous: each is capped at Elevated with `review`. Phase 3 never infers equivalence from titles.
+
+## Explainability and deterministic output
+
+Every non-Normal driver identifies the originating context and resolution, attack path, boundary, enforced security effect, mitigation/boundary role, base proposal, relevance reason, confidence, and every cap preventing a higher result. Text is concise and deterministic; no generated narrative is used.
+
+Projection, drivers, overlays, findings, and summaries are frozen typed models. All inputs and output collections use canonical composite-identity/ID ordering. JSON uses sorted keys, compact separators, and no implicit timestamps.
+
+## Summary
+
+`ThreatPrioritySummary` reports projected controls, Normal/Elevated/High/Critical counts, review-capped controls, unique contexts/paths/boundaries, controls by immutable base proposal, and controls by mitigation role. It has no target percentages and does not modify production counts.
+
+## Phase 4: future AI interpretation
+
+Phase 4 is not implemented:
+
+```text
+Unstructured threat advisory
+      ↓
+AI interpretation
+      ↓
+validated ThreatContext
+      ↓
+existing deterministic Phase 2/3 pipeline
+```
+
+Before Phase 4, governance must define validation authority, provenance and legal controls, prompt/model versioning, adversarial-input handling, confidence calibration, human approval, and fail-closed behavior. AI must never write a final Mandatory classification.

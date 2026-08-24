@@ -213,6 +213,12 @@ approved ThreatContext enters that pipeline. See
 [AI Threat Interpretation Contract](AI_THREAT_INTERPRETATION_CONTRACT.md) for the
 authority, grounding, provenance, adversarial-input, and conversion rules.
 
+Provider evidence binding is exact: every proposed security-knowledge ID,
+technology, or non-unknown activity state requires a matching closed-vocabulary
+assertion with the same canonical value. Inferred catalog mappings remain marked as
+inferred and lower confidence conservatively. Caller-supplied source metadata is
+validated directly rather than re-asserted by the model.
+
 ## Phase 4C: explicit human approval
 
 Phase 4C exposes the existing Phase 4A approval gate as a separate provider-free
@@ -242,3 +248,28 @@ The `ThreatContext` is the first AI-originated object allowed into deterministic
 resolution. Even then, Phase 2 and Phase 3 retain their existing rules. The base
 Mandatory proposal remains an independent immutable dimension and is never changed
 by interpretation, approval, resolution, or prioritization.
+
+## Phase 3 precision and causal distance
+
+Threat relevance starts at `Normal`. A driver establishes a higher relevance only
+through an exact resolved-boundary intersection or an exact mapping attribution to
+an explicitly asserted ThreatContext technique. Attack-path equality alone does not
+establish elevation. Confidence, applicability, resolution, equivalence, mapping
+eligibility, and role rules are ceilings: they can reduce an established relevance
+but never create one.
+
+Every path-to-mapping driver is evaluated independently. A valid boundary-backed
+driver may determine the aggregate result while a separate boundary-mismatched
+driver remains visible as `Normal` with
+`THREAT_PROJECTION_BOUNDARY_NOT_RESOLVED`. Supporting hardening, detection,
+investigation, and recovery without another strong causal basis remain `Normal`.
+Information-hiding, fine-tuning, and operational mappings always have a `Normal`
+ceiling.
+
+Projection output separates `context_technique_ids` from
+`derived_technique_ids`. Techniques inherited as siblings of an explicitly selected
+attack path remain catalog context and cannot independently establish relevance.
+The legacy compatibility adapter still has known mapping-quality debt: broad
+criterion-derived roles, generic boundary identifiers, synthesized scenario IDs,
+missing technique attribution, and control-family fallback effects. Those data
+issues are intentionally not repaired by the Phase 3 precision rules.

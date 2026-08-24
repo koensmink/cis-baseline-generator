@@ -14,6 +14,7 @@ from cis_pdf2csv.security_knowledge.catalog import SECURITY_KNOWLEDGE_CATALOG
 from cis_pdf2csv.security_knowledge.threat_intelligence.ai import (
     AdvisoryContentFormat,
     AdvisoryDocumentProvenance,
+    EvidenceAssertionType,
     ThreatAdvisoryDocument,
     build_document_id,
     content_hash,
@@ -514,3 +515,232 @@ def test_provider_output_has_no_approval_or_control_decision_fields() -> None:
     serialized = result.interpretation.to_deterministic_json()
     for forbidden in ("approval_status", "base_proposal", "threat_relevance", "advisory_action"):
         assert forbidden not in serialized
+
+
+SMOKE_ADVISORY = (
+    "A threat actor has been observed targeting enterprise Windows environments. "
+    "Attempts to obtain user credentials and reuse stolen credentials were observed. "
+    "Successful exploitation may allow unauthorized authentication. "
+    "Remote administrative services may be affected."
+)
+
+
+def smoke_assertion(
+    assertion_id: str,
+    assertion_type: str,
+    value: str,
+    *,
+    support_type: str,
+    explicitly_stated: bool,
+    inference_required: bool,
+) -> dict[str, Any]:
+    return {
+        "assertion_id": assertion_id,
+        "assertion_type": assertion_type,
+        "value": value,
+        "source_locator": f"sentence:{assertion_id}",
+        "evidence_excerpt_hash": None,
+        "support_type": support_type,
+        "confidence": "High",
+        "explicitly_stated": explicitly_stated,
+        "inference_required": inference_required,
+    }
+
+
+def corrected_smoke_payload() -> dict[str, Any]:
+    assertions = valid_payload()["evidence_assertions"] + [
+        smoke_assertion(
+            "A-ACTIVITY", "activity_state", "observed",
+            support_type="explicitly_stated", explicitly_stated=True, inference_required=False,
+        ),
+        smoke_assertion(
+            "A-WINDOWS", "affected_technology_family", "Windows",
+            support_type="explicitly_stated", explicitly_stated=True, inference_required=False,
+        ),
+        smoke_assertion(
+            "A-TECHNIQUE", "technique_id", "TEC-003",
+            support_type="inferred", explicitly_stated=False, inference_required=True,
+        ),
+        smoke_assertion(
+            "A-PATH", "attack_path_id", "AP-003",
+            support_type="inferred", explicitly_stated=False, inference_required=True,
+        ),
+    ]
+    return valid_payload(
+        proposed_confidence="High",
+        proposed_activity_state="observed",
+        proposed_affected_technology_families=["Windows"],
+        proposed_technique_ids=["TEC-003"],
+        proposed_attack_path_ids=["AP-003"],
+        evidence_assertions=assertions,
+    )
+
+
+def test_smoke_payload_with_mismatched_material_evidence_blocks() -> None:
+    payload = corrected_smoke_payload()
+    payload["evidence_assertions"] = valid_payload()["evidence_assertions"] + [
+        smoke_assertion(
+            "A-ACTIVITY", "claim", "malicious activity was seen",
+            support_type="explicitly_stated", explicitly_stated=True, inference_required=False,
+        ),
+        smoke_assertion(
+            "A-WINDOWS", "affected_technology_family", "enterprise Windows environments",
+            support_type="explicitly_stated", explicitly_stated=True, inference_required=False,
+        ),
+        smoke_assertion(
+            "A-TECHNIQUE", "claim", "credential reuse",
+            support_type="inferred", explicitly_stated=False, inference_required=True,
+        ),
+        smoke_assertion(
+            "A-PATH", "claim", "remote authentication path",
+            support_type="inferred", explicitly_stated=False, inference_required=True,
+        ),
+    ]
+    adapter, _ = provider(json.dumps(payload))
+    with pytest.raises(ProviderContractValidationError) as caught:
+        interpret(adapter, advisory(SMOKE_ADVISORY))
+    codes = {finding.code for finding in caught.value.findings}
+    assert "AI_INTERPRETATION_MISSING_EVIDENCE" in codes
+    assert "AI_INTERPRETATION_UNGROUNDED_ACTIVITY_STATE" in codes
+
+
+def test_corrected_live_smoke_contract_payload_passes_and_caps_inference() -> None:
+    payload = corrected_smoke_payload()
+    result = interpret(provider(json.dumps(payload))[0], advisory(SMOKE_ADVISORY))
+    assert result.validation.capped_confidence.value == "Low"
+    assert result.interpretation.proposed_activity_state.value == "observed"
+    assert result.interpretation.proposed_affected_technology_families == ("Windows",)
+    assert len(result.interpretation.evidence_assertions) == len(payload["evidence_assertions"])
+    assert not hasattr(result.interpretation, "approval")
+    assert not hasattr(result, "threat_context")
+
+
+@pytest.mark.parametrize(
+    ("activity_assertion", "passes"),
+    [
+        (None, False),
+        (
+            smoke_assertion(
+                "A-ACTIVITY", "activity_state", "observed",
+                support_type="inferred", explicitly_stated=False, inference_required=True,
+            ),
+            False,
+        ),
+        (
+            smoke_assertion(
+                "A-ACTIVITY", "activity_state", "observed",
+                support_type="explicitly_stated", explicitly_stated=True, inference_required=False,
+            ),
+            True,
+        ),
+    ],
+)
+def test_observed_activity_exact_explicit_grounding(
+    activity_assertion: dict[str, Any] | None, passes: bool
+) -> None:
+    payload = valid_payload(proposed_activity_state="observed")
+    if activity_assertion is not None:
+        payload["evidence_assertions"] += [activity_assertion]
+    adapter, _ = provider(json.dumps(payload))
+    if passes:
+        assert interpret(adapter).interpretation.proposed_activity_state.value == "observed"
+    else:
+        with pytest.raises(ProviderContractValidationError):
+            interpret(adapter)
+
+
+def test_targeting_wording_does_not_ground_actively_exploited() -> None:
+    payload = corrected_smoke_payload()
+    payload["proposed_activity_state"] = "actively_exploited"
+    adapter, _ = provider(json.dumps(payload))
+    with pytest.raises(ProviderContractValidationError):
+        interpret(adapter, advisory(SMOKE_ADVISORY))
+
+
+@pytest.mark.parametrize(
+    ("technology_value", "passes"),
+    [("Windows", True), ("enterprise Windows environments", False)],
+)
+def test_technology_requires_exact_canonical_explicit_binding(
+    technology_value: str, passes: bool
+) -> None:
+    payload = valid_payload(
+        proposed_affected_technology_families=["Windows"],
+        evidence_assertions=valid_payload()["evidence_assertions"]
+        + [
+            smoke_assertion(
+                "A-WINDOWS", "affected_technology_family", technology_value,
+                support_type="explicitly_stated", explicitly_stated=True, inference_required=False,
+            )
+        ],
+    )
+    adapter, _ = provider(json.dumps(payload))
+    if passes:
+        assert interpret(adapter, advisory(SMOKE_ADVISORY)).interpretation.proposed_affected_technology_families == ("Windows",)
+    else:
+        with pytest.raises(ProviderContractValidationError):
+            interpret(adapter, advisory(SMOKE_ADVISORY))
+
+
+@pytest.mark.parametrize(
+    ("field", "assertion_type", "identifier", "assertion_value", "passes"),
+    [
+        ("proposed_technique_ids", "technique_id", "TEC-003", "TEC-003", True),
+        ("proposed_technique_ids", "technique_id", "TEC-003", "credential reuse", False),
+        ("proposed_attack_path_ids", "attack_path_id", "AP-003", "AP-003", True),
+        ("proposed_attack_path_ids", "attack_path_id", "AP-003", "remote authentication", False),
+    ],
+)
+def test_catalog_mapping_requires_exact_id_binding(
+    field: str,
+    assertion_type: str,
+    identifier: str,
+    assertion_value: str,
+    passes: bool,
+) -> None:
+    payload = valid_payload(
+        **{
+            field: [identifier],
+            "evidence_assertions": valid_payload()["evidence_assertions"]
+            + [
+                smoke_assertion(
+                    "A-CATALOG", assertion_type, assertion_value,
+                    support_type="inferred", explicitly_stated=False, inference_required=True,
+                )
+            ],
+        }
+    )
+    adapter, _ = provider(json.dumps(payload))
+    if passes:
+        result = interpret(adapter)
+        assert result.validation.capped_confidence.value == "Low"
+        binding = next(item for item in result.interpretation.evidence_assertions if item.assertion_id == "A-CATALOG")
+        assert binding.inference_required
+        assert not binding.explicitly_stated
+    else:
+        with pytest.raises(ProviderContractValidationError):
+            interpret(adapter)
+
+
+def test_provider_schema_rejects_arbitrary_assertion_type() -> None:
+    payload = valid_payload()
+    payload["evidence_assertions"][0]["assertion_type"] = "invented_material_type"
+    adapter, _ = provider(json.dumps(payload))
+    with pytest.raises(ProviderSchemaMismatchError):
+        interpret(adapter)
+    assert {item.value for item in EvidenceAssertionType} >= {
+        "activity_state", "technique_id", "attack_path_id", "affected_technology_family"
+    }
+
+
+def test_provider_block_diagnostics_are_structured_and_safe() -> None:
+    secret = "sk-synthetic-secret-never-output"
+    payload = valid_payload(proposed_activity_state="observed")
+    adapter, _ = provider(json.dumps(payload), key=secret)
+    with pytest.raises(ProviderContractValidationError) as caught:
+        interpret(adapter, advisory(SMOKE_ADVISORY))
+    assert caught.value.findings
+    assert "AI_INTERPRETATION_MISSING_EVIDENCE" in str(caught.value)
+    assert secret not in str(caught.value)
+    assert SMOKE_ADVISORY not in str(caught.value)
+    assert caught.value.material_values == ("activity_state=observed",)

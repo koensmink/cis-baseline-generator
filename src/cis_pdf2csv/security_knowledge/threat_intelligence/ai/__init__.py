@@ -21,6 +21,7 @@ from .schema import (
     AIContractFindingSeverity,
     ApprovalModification,
     ApprovalStatus,
+    EvidenceAssertionType,
     EvidenceSupportType,
     InterpretationEvidenceAssertion,
     InterpretationValidationResult,
@@ -31,6 +32,7 @@ from .schema import (
     ThreatInterpretationApproval,
 )
 from .validation import (
+    required_evidence_bindings,
     validate_advisory_document,
     validate_interpretation,
     validate_interpretation_catalog_references,
@@ -49,6 +51,7 @@ __all__ = [
     "AdvisoryDocumentProvenance",
     "ApprovalModification",
     "ApprovalStatus",
+    "EvidenceAssertionType",
     "EvidenceSupportType",
     "InterpretationApprovalError",
     "InterpretationEvidenceAssertion",
@@ -63,6 +66,7 @@ __all__ = [
     "build_threat_context_from_approved_interpretation",
     "content_hash",
     "material_assertion_ids",
+    "required_evidence_bindings",
     "validate_advisory_document",
     "validate_interpretation",
     "validate_interpretation_approval",

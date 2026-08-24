@@ -13,7 +13,11 @@ from ..boundaries import ApplicabilityMode
 from ..mitigation import BoundaryRole, MitigationRole, MitigationStrength
 from ..provenance import Confidence
 from ..schema import Proposal
-from .projection import ProjectionEligibility, ThreatControlProjection
+from .projection import (
+    ProjectionCausalBasis,
+    ProjectionEligibility,
+    ThreatControlProjection,
+)
 from .resolution import ResolutionStatus
 
 
@@ -52,6 +56,11 @@ class ThreatPriorityDriver(BaseModel):
     attack_path_ids: tuple[str, ...]
     boundary_ids: tuple[str, ...]
     technique_ids: tuple[str, ...]
+    context_technique_ids: tuple[str, ...]
+    derived_technique_ids: tuple[str, ...]
+    context_scenario_ids: tuple[str, ...]
+    derived_scenario_ids: tuple[str, ...]
+    causal_bases: tuple[ProjectionCausalBasis, ...]
     security_effect: str
     mitigation_role: MitigationRole
     mitigation_strength: MitigationStrength
@@ -75,6 +84,10 @@ class ThreatInformedControlOverlay(BaseModel):
     attack_path_ids: tuple[str, ...]
     boundary_ids: tuple[str, ...]
     technique_ids: tuple[str, ...]
+    context_technique_ids: tuple[str, ...]
+    derived_technique_ids: tuple[str, ...]
+    context_scenario_ids: tuple[str, ...]
+    derived_scenario_ids: tuple[str, ...]
     threat_context_ids: tuple[str, ...]
     mitigation_roles: tuple[MitigationRole, ...]
     boundary_roles: tuple[BoundaryRole, ...]
@@ -205,15 +218,22 @@ def _driver(
     def cap(code: str, message: str) -> None:
         findings.append(PriorityFinding(code=code, message=message))
 
-    relevance = ThreatRelevance.ELEVATED
-    if (
-        projection.boundary_role in _NORMAL_ROLES
-        or projection.eligibility == ProjectionEligibility.INELIGIBLE
-    ):
-        relevance = ThreatRelevance.NORMAL
+    relevance = ThreatRelevance.NORMAL
+    has_causal_basis = bool(projection.causal_bases)
+    if projection.eligibility == ProjectionEligibility.INELIGIBLE:
+        cap(
+            "THREAT_PRIORITY_ROLE_NORMAL_CEILING",
+            "An ineligible projection has a Normal ceiling.",
+        )
+    elif projection.boundary_role in _NORMAL_ROLES:
         cap(
             "THREAT_PRIORITY_ROLE_NORMAL_CEILING",
             f"Boundary role {projection.boundary_role.value} has a Normal ceiling.",
+        )
+    elif not has_causal_basis:
+        cap(
+            "THREAT_PRIORITY_CAUSAL_BASIS_REQUIRED",
+            "Attack-path proximity without a resolved boundary or exact explicit-technique mapping does not establish Elevated relevance.",
         )
     elif projection.boundary_role in {
         BoundaryRole.SUPPORTING_HARDENING,
@@ -223,22 +243,21 @@ def _driver(
         MitigationRole.INVESTIGATE,
         MitigationRole.RECOVER,
     }:
+        relevance = ThreatRelevance.ELEVATED
         cap(
             "THREAT_PRIORITY_SUPPORTING_CEILING",
             "Supporting, detection, investigation, and recovery effects are capped at Elevated.",
         )
     elif (
-        projection.resolution_status == ResolutionStatus.RESOLVED
-        and confidence == Confidence.HIGH
-        and projection.boundary_ids
+        ProjectionCausalBasis.RESOLVED_BOUNDARY in projection.causal_bases
         and projection.boundary_role in _CORE_ROLES
         and projection.mitigation_strength
         in {MitigationStrength.PRIMARY, MitigationStrength.COMPLEMENTARY}
         and projection.mitigation_role in _DIRECT_MITIGATIONS
-        and projection.applicability_mode == ApplicabilityMode.UNIVERSAL
-        and projection.eligibility == ProjectionEligibility.ELIGIBLE
     ):
         relevance = ThreatRelevance.HIGH
+    else:
+        relevance = ThreatRelevance.ELEVATED
 
     if projection.resolution_status != ResolutionStatus.RESOLVED:
         relevance = min(
@@ -300,11 +319,15 @@ def _driver(
         "; ".join(item.message for item in ordered_findings)
         or "No priority cap applies."
     )
+    basis_text = ", ".join(item.value for item in projection.causal_bases) or "none"
     rationale = (
         f"Threat {projection.threat_context_id} resolves attack path {', '.join(projection.attack_path_ids)} "
         f"and boundary {', '.join(projection.boundary_ids) or 'unresolved'}; mapping {projection.mapping_id} "
         f"enforces {projection.security_effect} as {projection.mitigation_role.value}/"
         f"{projection.boundary_role.value} ({projection.mitigation_strength.value}). "
+        f"Causal basis: {basis_text}. Explicit context techniques: "
+        f"{', '.join(projection.context_technique_ids) or 'none'}; derived path techniques: "
+        f"{', '.join(projection.derived_technique_ids) or 'none'}. "
         f"This produces {relevance.value} relevance at {confidence.value} confidence. "
         f"Base proposal remains {projection.base_proposal.value}. Cap rationale: {cap_text}"
     )
@@ -319,6 +342,11 @@ def _driver(
         attack_path_ids=projection.attack_path_ids,
         boundary_ids=projection.boundary_ids,
         technique_ids=projection.technique_ids,
+        context_technique_ids=projection.context_technique_ids,
+        derived_technique_ids=projection.derived_technique_ids,
+        context_scenario_ids=projection.context_scenario_ids,
+        derived_scenario_ids=projection.derived_scenario_ids,
+        causal_bases=projection.causal_bases,
         security_effect=projection.security_effect,
         mitigation_role=projection.mitigation_role,
         mitigation_strength=projection.mitigation_strength,
@@ -377,7 +405,7 @@ def prioritize_threat_projections(
         )
         review_capped = any(
             item.code in _REVIEW_CAP_CODES
-            for driver in drivers
+            for driver in winning
             for item in driver.findings
         )
         action = {
@@ -414,6 +442,42 @@ def prioritize_threat_projections(
                 technique_ids=tuple(
                     sorted({value for item in drivers for value in item.technique_ids})
                 ),
+                context_technique_ids=tuple(
+                    sorted(
+                        {
+                            value
+                            for item in drivers
+                            for value in item.context_technique_ids
+                        }
+                    )
+                ),
+                derived_technique_ids=tuple(
+                    sorted(
+                        {
+                            value
+                            for item in drivers
+                            for value in item.derived_technique_ids
+                        }
+                    )
+                ),
+                context_scenario_ids=tuple(
+                    sorted(
+                        {
+                            value
+                            for item in drivers
+                            for value in item.context_scenario_ids
+                        }
+                    )
+                ),
+                derived_scenario_ids=tuple(
+                    sorted(
+                        {
+                            value
+                            for item in drivers
+                            for value in item.derived_scenario_ids
+                        }
+                    )
+                ),
                 threat_context_ids=tuple(
                     sorted({item.threat_context_id for item in drivers})
                 ),
@@ -432,7 +496,11 @@ def prioritize_threat_projections(
                 security_effects=tuple(
                     sorted({item.security_effect for item in drivers})
                 ),
-                rationale=" ".join(item.rationale for item in drivers),
+                rationale=(
+                    f"Aggregate {relevance.value} relevance is determined by "
+                    f"{', '.join(item.driver_id for item in winning)}. "
+                    + " ".join(item.rationale for item in drivers)
+                ),
                 drivers=drivers,
                 findings=tuple(finding_map[key] for key in sorted(finding_map)),
             )

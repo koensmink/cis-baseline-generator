@@ -6,6 +6,7 @@ from .base import (
 from .config import OpenAIProviderConfig, ProviderPrivacyPolicy
 from .errors import (
     AIProviderError,
+    EvidenceBindingDiagnostic,
     InvalidStructuredOutputError,
     MissingCredentialError,
     ProviderAuthenticationError,
@@ -24,6 +25,7 @@ from .prompt import build_provider_messages, catalog_vocabulary, vocabulary_hash
 
 __all__ = [
     "AIProviderError",
+    "EvidenceBindingDiagnostic",
     "InvalidStructuredOutputError",
     "MissingCredentialError",
     "OpenAIProviderConfig",

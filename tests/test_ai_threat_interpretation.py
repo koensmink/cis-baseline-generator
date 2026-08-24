@@ -15,6 +15,7 @@ from cis_pdf2csv.security_knowledge.threat_intelligence.ai import (
     AdvisoryDocumentProvenance,
     AIInterpretationProvenance,
     ApprovalStatus,
+    EvidenceAssertionType,
     EvidenceSupportType,
     InterpretationApprovalError,
     InterpretationEvidenceAssertion,
@@ -48,7 +49,7 @@ NOW = datetime(2026, 8, 24, 12, tzinfo=UTC)
 
 def assertion(
     assertion_id: str,
-    assertion_type: str,
+    assertion_type: EvidenceAssertionType | str,
     value: str,
     *,
     support: EvidenceSupportType = EvidenceSupportType.EXPLICITLY_STATED,
@@ -57,7 +58,7 @@ def assertion(
     explicit = support == EvidenceSupportType.EXPLICITLY_STATED
     return InterpretationEvidenceAssertion(
         assertion_id=assertion_id,
-        assertion_type=assertion_type,
+        assertion_type=EvidenceAssertionType(assertion_type),
         value=value,
         source_locator=f"paragraph:{assertion_id}",
         support_type=support,
@@ -467,3 +468,39 @@ def test_ai_package_has_no_provider_or_network_imports() -> None:
     )
     for forbidden in ("import openai", "import anthropic", "import requests", "import httpx", "import socket"):
         assert forbidden not in contents
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("source_reference", "SPOOFED-REFERENCE"),
+        ("published_at", datetime(2026, 8, 25, 12, tzinfo=UTC)),
+    ],
+)
+def test_deterministic_document_metadata_cannot_be_spoofed(
+    field: str, value: object
+) -> None:
+    doc = document()
+    item = interpretation(doc).model_copy(update={field: value})
+    result = validate_interpretation(item, doc, SECURITY_KNOWLEDGE_CATALOG)
+    assert "AI_INTERPRETATION_DOCUMENT_METADATA_MISMATCH" in codes(result)
+    assert result.blocking
+
+
+def test_document_metadata_needs_no_ai_evidence_but_identity_still_matches() -> None:
+    doc = document()
+    item = interpretation(doc)
+    assertions = tuple(
+        value
+        for value in item.evidence_assertions
+        if value.assertion_type.value not in {"source_reference", "published_at"}
+    )
+    result = validate_interpretation(
+        item.model_copy(update={"evidence_assertions": assertions}),
+        doc,
+        SECURITY_KNOWLEDGE_CATALOG,
+    )
+    assert not result.blocking
+    assert item.input_document_id == doc.document_id
+    assert item.input_hash == doc.content_hash
+    assert item.provenance.input_document_hash == doc.content_hash

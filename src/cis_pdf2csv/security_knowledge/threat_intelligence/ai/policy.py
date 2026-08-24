@@ -45,8 +45,6 @@ class AIInterpretationPolicy(BaseModel):
         "activity_state",
         "affected_technology_family",
         "attack_path_id",
-        "published_at",
-        "source_reference",
         "technique_id",
         "threat_scenario_id",
     )

@@ -32,6 +32,10 @@ THREAT_OVERLAY_CSV_FIELDS = [
     "attack_path_ids",
     "boundary_ids",
     "technique_ids",
+    "context_technique_ids",
+    "derived_technique_ids",
+    "context_scenario_ids",
+    "derived_scenario_ids",
     "mitigation_roles",
     "mitigation_strengths",
     "boundary_roles",
@@ -64,6 +68,10 @@ def _csv_row(item: ThreatInformedControlOverlay) -> dict[str, str]:
         "attack_path_ids": ";".join(item.attack_path_ids),
         "boundary_ids": ";".join(item.boundary_ids),
         "technique_ids": ";".join(item.technique_ids),
+        "context_technique_ids": ";".join(item.context_technique_ids),
+        "derived_technique_ids": ";".join(item.derived_technique_ids),
+        "context_scenario_ids": ";".join(item.context_scenario_ids),
+        "derived_scenario_ids": ";".join(item.derived_scenario_ids),
         "mitigation_roles": ";".join(role.value for role in item.mitigation_roles),
         "mitigation_strengths": ";".join(
             sorted({driver.mitigation_strength.value for driver in item.drivers})

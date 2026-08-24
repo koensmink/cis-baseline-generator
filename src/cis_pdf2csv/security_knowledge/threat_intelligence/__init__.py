@@ -11,6 +11,7 @@ from .prioritization import (
 )
 from .projection import (
     ControlProjectionResult,
+    ProjectionCausalBasis,
     ProjectionEligibility,
     ProjectionFinding,
     ThreatControlProjection,
@@ -53,6 +54,7 @@ __all__ = [
     "FindingSeverity",
     "KnowledgeObjectType",
     "PriorityFinding",
+    "ProjectionCausalBasis",
     "ProjectionEligibility",
     "ProjectionFinding",
     "RelationshipSource",

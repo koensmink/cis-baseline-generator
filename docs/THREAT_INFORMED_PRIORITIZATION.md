@@ -1,61 +1,93 @@
 # Threat-Informed Control Prioritization
 
-## Purpose and Phase 1 boundary
+## Purpose and phase boundary
 
-Phase 1 introduces a normative, source-independent `ThreatContext` domain model and deterministic validation. It records concise, time-sensitive threat assertions and points to reusable Security Knowledge Catalog objects. It does not score controls, join threats to controls, promote controls, ingest feeds, or use AI.
+Phase 2 adds deterministic resolution from a `ThreatContext` to existing, source-independent Security Knowledge Catalog concepts. It answers which existing security knowledge is relevant to an asserted threat context. It does not score, rank, promote, demote, or classify any CIS recommendation.
 
-Phase 1 cannot change a Mandatory decision. The production Mandatory engine, Candidate Mandatory criteria, Review Required and Regular Control semantics, boundary completeness, adapters, shadow mode, parser, Intune mapping, and CLI remain independent and unchanged.
+The production Mandatory engine, Candidate Mandatory criteria, Review Required and Regular Control semantics, boundary completeness, benchmark-family adapters, shadow mode, parser, Intune mapping, CLI, and Security Knowledge Catalog remain independent and unchanged. When no context is evaluated, application behavior is unchanged.
 
-## Architecture
+## Phase 2 architecture
 
 ```text
-Threat intelligence
-        ↓
 ThreatContext
-        ↓
-[future] Knowledge resolution
-        ↓
-[future] Threat priority overlay
+     ↓
+Deterministic Knowledge Resolver
+     ├─ ThreatScenario
+     ├─ AttackTechnique
+     ├─ AttackPath
+     ├─ SecurityBoundary
+     └─ SecurityOutcome
 
-Base Mandatory Engine remains independent.
+Base Mandatory Engine (separate and unchanged)
 ```
 
-The bounded module is `cis_pdf2csv.security_knowledge.threat_intelligence`. It is not imported by production classification paths. Contexts point toward catalog techniques, attack paths, and threat scenarios; catalog objects never receive reverse context identifiers and remain source-independent.
+The resolver is bounded within `cis_pdf2csv.security_knowledge.threat_intelligence`. Production classification paths do not import or invoke it. It builds deterministic inverse indexes in memory and never adds reverse threat-context identifiers to catalog objects.
 
-## ThreatContext model
+## ThreatContext identity and revision
 
-`ThreatContext` is frozen and uses immutable tuples. Its deterministic `THRCTX-...` identifier is internal; CVEs, government identifiers, Microsoft identifiers, and vendor advisory identifiers belong in `source_reference` or evidence `external_reference` fields.
+The stable `threat_context_id` identifies the context independently of its content. It is not a full-content hash. Resolution output separately retains the context provenance `object_version` as `threat_context_revision`. External advisories and evidence identifiers remain source/evidence references rather than context identity.
 
-The model records title and description, source identity/type, observed and publication times, validity window, assertion confidence, technical severity, lifecycle status, optional catalog relationship IDs, generic asset and technology families, applicability, concise evidence, and provenance. Relationship chains may be incomplete. A context can therefore describe a technique before an attack path is known, an attack path supported by scenarios, or an unresolved advisory retained for review.
+## Resolution statuses
 
-Applicability is threat applicability, not CIS recommendation applicability. Its dimensions are global, technology family, product family, deployment-specific, sector-specific, environment-specific, and unresolved. For example, a context can apply to “Microsoft 365 cloud authentication” without asserting that a particular tenant is vulnerable. No customer-specific model is introduced.
+- `resolved`: an active context has an unambiguous valid chain containing active threat scenario, technique, attack path, boundary, and outcome concepts.
+- `partially_resolved`: at least one valid knowledge relationship is retained, but a non-ambiguous chain gap remains, such as an unattached technique or a path without a boundary or outcome.
+- `review_required`: an inactive catalog reference or lifecycle successor choice needs human judgment. This is a knowledge-resolution status, not the Mandatory engine's Review Required classification.
+- `unresolved`: no reliable knowledge relationship can be established, or an active-participation blocker prevents resolution.
+- `inactive`: a valid context is not active at the explicitly supplied evaluation instant.
 
-## Confidence and severity
+These statuses never classify controls.
 
-Threat confidence reuses the Security Knowledge `High`, `Medium`, and `Low` confidence model and describes confidence in the threat assertion. It never describes confidence in a Mandatory decision.
+## Explicit-reference precedence and traversal
 
-Technical severity is a separate deterministic `Low`, `Medium`, `High`, or `Critical` enum. Confidence, technical severity, active exploitation, and any future control priority remain distinct. A high-confidence, medium-severity context and a medium-confidence, critical-severity context are both valid. Phase 1 has no priority enum or scoring.
+Resolution uses only identifiers asserted by the context and authoritative catalog relationships:
 
-## Time validity and lifecycle
+1. Explicit active AttackPath references are resolved first. Their scenarios, techniques, boundaries, and outcomes are followed exactly as modeled.
+2. Explicit active AttackTechnique references use a reconstructed `technique_id → AttackPath` index. Every active match is preserved.
+3. Explicit active ThreatScenario references use a reconstructed `threat_scenario_id → AttackPath` index. Every active match is preserved.
+4. Prose or evidence without catalog identifiers is not keyword-matched or semantically inferred; it remains unresolved in Phase 2.
 
-All supplied observation, publication, retrieval, and validity timestamps require explicit timezone information. `valid_from` cannot follow `valid_until`. `is_active(at_time)` requires an explicit timezone-aware timestamp and never consults the system clock. Future contexts are inactive until their validity starts. Expired contexts remain readable but are inactive; they produce an informational lifecycle finding. An `active` lifecycle status that contradicts a future or expired window is a blocking error.
+Multiple valid matching paths are not ambiguous and are never arbitrarily collapsed. Missing links are not invented. Boundary resolution names relevant boundaries only; it does not evaluate CIS `BoundarySet` completeness. Outcome resolution retains technical `SecurityOutcome` objects only and does not infer business risk or create customer-specific risks.
 
-Historical catalog resolution is opt-in. Deprecated or superseded catalog references block ordinary validation but become informational findings in historical mode.
+## Evidence lineage and deterministic output
 
-## Evidence and provenance
+Each resolved reference records its object ID and type, relationship source, originating context ID, conservative confidence, and compact source/evidence identifiers. Full evidence blobs are not copied into every relationship.
 
-Threat evidence supports vendor advisories, government advisories, vulnerability records, threat-research reports, incident observations, internal security observations, and analyst assertions. Each item keeps a source, external reference, concise assertion, confidence, available publication/retrieval times, and collection provenance. The model is intended for assertions and locators—not copied reports or copyrighted article text. Context provenance records authority, creation method, model/object versions, and optional creation/supersession metadata. No volatile timestamp is generated automatically.
+Results use immutable Pydantic models, canonical ordering for all object collections, findings, and resolution paths, sorted JSON keys, compact separators, and no implicit timestamps. Equivalent contexts and catalogs therefore produce byte-stable JSON regardless of input identifier ordering. The catalog is never mutated.
 
-## Validation and serialization
+## Confidence propagation
 
-Validation findings are stable structured objects with error, warning, or informational severity and a `blocking` property. Errors cover invalid identifiers/time ranges, timezone omissions, lifecycle contradictions, and inactive catalog references. Warnings retain unresolved references, missing evidence, and unresolved applicability for review. Expired/future state is informational when lifecycle is consistent.
+Resolution reuses the existing `High`, `Medium`, and `Low` values and introduces no numeric score. A relationship's confidence is the least-confident value among the originating context, its attack path where applicable, and catalog technique/scenario confidence where modeled. Aggregate resolution confidence is the least-confident resolved relationship. It can never exceed context confidence. Confidence does not rank controls.
 
-Catalog reference validation verifies techniques, attack paths, and threat scenarios without requiring all relationship types. Active objects are required unless historical mode is explicit. Deterministic JSON uses sorted keys, compact separators, stable set-like field/evidence ordering, and no random identifiers or implicit timestamps.
+## Active time and lifecycle behavior
 
-## Planned phases
+Validity is the half-open interval `[valid_from, valid_until)`: `valid_from` is inclusive and `valid_until` is exclusive. Evaluation requires an explicit timezone-aware instant and never reads the system clock. Expired and future contexts are inactive in normal mode and do not produce active resolution. Invalid or timezone-incomplete temporal windows are unresolved participation blockers.
 
-- Phase 2: deterministic knowledge resolution from contexts to existing catalog concepts, without Mandatory cutover.
-- Phase 3: a separately governed threat-priority overlay with explicit semantics and regression comparison.
-- Phase 4: operational ingestion and lifecycle governance after provenance, legal, freshness, and review decisions are approved.
+Historical mode is explicit in both the resolver call and output. It may retain deprecated or superseded objects for historical analysis. It does not silently rewrite catalog references.
 
-Before Phase 2, governance should decide successor-resolution rules, duplicate-context identity/revision policy, exact active-window boundary inclusivity, and which unresolved findings prevent use by a future overlay.
+## Successor handling
+
+Normal resolution uses active catalog objects only. An explicit deprecated or superseded reference is preserved in a structured finding and sets `review_required`; it is not included as an active resolved object. Findings distinguish deprecated references, superseded references with one active successor suggestion, multiple active successor candidates, and no active successor. Candidate IDs and the original lifecycle reason are retained, but replacement always requires a later human decision.
+
+## Applicability boundary
+
+Resolution retains affected technology families, targeted asset classes, and threat applicability scope. These describe the threat assertion, not CIS recommendation applicability and not whether a customer's environment is affected. An unresolved applicability scope is a participation blocker when active resolution cannot safely determine scope; the resolver does not guess between knowledge branches.
+
+## Coverage reporting
+
+The deterministic aggregate report counts the five resolution statuses plus referenced techniques, resolved attack paths, boundaries, outcomes, and unresolved external/catalog references. It contains no CIS recommendation or control counts.
+
+## Why no control priority exists yet
+
+Phase 2 stops at reusable security knowledge. It does not project threat relevance onto mitigation mappings or controls, so it cannot change Mandatory classification or produce a priority overlay. Governance workflow and analyst-approval rules for control-priority participation are also outside this phase.
+
+Phase 3 is future work and is not implemented:
+
+```text
+ThreatResolution
+      ↓
+Control/Boundary Mitigation Projection
+      ↓
+Threat-Informed Priority Overlay
+```
+
+Phase 3 must define projection semantics, conflict handling, applicability and approval rules, overlay representation, and regression safeguards before any control-level output is introduced. Phase 4 may later address unstructured interpretation and operational ingestion; Phase 2 uses no AI, live feeds, or network access.

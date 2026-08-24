@@ -67,6 +67,28 @@ The Mandatory classification and threat relevance are independent dimensions:
 
 For example, a control can remain `Regular Control` while receiving `High` threat relevance and the advisory action `prioritize`. It has not become Mandatory. The threat CLI recomputes the unchanged base assessment from the supplied controls, accepts repeated `--threat-context` flags, and performs no AI interpretation or remote ingestion.
 
+### Optional advisory interpretation workflow
+
+The OpenAI provider adapter is an optional, separate step for locally saved advisory
+text. Obtain the text out of band; URLs and live feeds are not accepted.
+
+```bash
+export OPENAI_API_KEY="<runtime-secret>"
+cis-threat-interpret advisory.txt \
+  --source-type vendor_advisory \
+  --source-name "Example Vendor" \
+  --source-reference "ADV-2026-001" \
+  --model "<structured-output-capable-model>" \
+  --generated-at 2026-08-24T12:00:00Z \
+  -o proposed-threat.json
+```
+
+Inspect the resulting untrusted `ProposedThreatInterpretation`, complete the
+separate human approval/conversion step, and supply only the approved
+`ThreatContext` to `cis-threat-analyze`. The API key is read at runtime and is never
+written to artifacts. Provider output cannot assign Mandatory status, select CIS
+controls, or assign threat relevance. Provider and network failures fail closed.
+
 ### Optional: map supported controls to Intune
 
 ```bash

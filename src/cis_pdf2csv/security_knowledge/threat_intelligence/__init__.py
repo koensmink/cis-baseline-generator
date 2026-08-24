@@ -1,4 +1,22 @@
 from .lifecycle import is_active
+from .prioritization import (
+    AdvisoryAction,
+    PriorityFinding,
+    ThreatInformedControlOverlay,
+    ThreatPriorityDriver,
+    ThreatPrioritySummary,
+    ThreatRelevance,
+    prioritize_threat_projections,
+    summarize_threat_priority,
+)
+from .projection import (
+    ControlProjectionResult,
+    ProjectionEligibility,
+    ProjectionFinding,
+    ThreatControlProjection,
+    project_threat_resolutions,
+    threat_resolution_id,
+)
 from .provenance import ThreatContextProvenance, ThreatEvidenceProvenance
 from .resolution import (
     FindingSeverity,
@@ -29,9 +47,14 @@ from .validation import (
 )
 
 __all__ = [
+    "AdvisoryAction",
+    "ControlProjectionResult",
     "FindingLevel",
     "FindingSeverity",
     "KnowledgeObjectType",
+    "PriorityFinding",
+    "ProjectionEligibility",
+    "ProjectionFinding",
     "RelationshipSource",
     "ResolutionCoverageReport",
     "ResolutionFinding",
@@ -42,15 +65,24 @@ __all__ = [
     "ThreatContext",
     "ThreatContextProvenance",
     "ThreatContextValidationFinding",
+    "ThreatControlProjection",
     "ThreatEvidence",
     "ThreatEvidenceProvenance",
     "ThreatEvidenceType",
+    "ThreatInformedControlOverlay",
+    "ThreatPriorityDriver",
+    "ThreatPrioritySummary",
+    "ThreatRelevance",
     "ThreatResolution",
     "ThreatSeverity",
     "ThreatSourceType",
     "build_resolution_coverage_report",
     "is_active",
+    "prioritize_threat_projections",
+    "project_threat_resolutions",
     "resolve_threat_context",
+    "summarize_threat_priority",
+    "threat_resolution_id",
     "validate_catalog_references",
     "validate_threat_context",
 ]

@@ -184,6 +184,31 @@ output fail closed.
 
 There is no provider integration, model call, network access, or remote ingestion
 in Phase 4A. Activity state remains at the interpretation boundary and does not
-change Phase 3 relevance rules. See
+change Phase 3 relevance rules.
+
+Phase 4B adds the separate optional `cis-threat-interpret` command. It reads only a
+local advisory file and calls the isolated OpenAI provider adapter using strict
+structured output. It writes an untrusted proposal and audit summary, not a
+ThreatContext or control overlay. URLs, live feeds, background ingestion, automatic
+approval, and classifier cutover remain prohibited.
+
+```text
+advisory.txt
+    ↓
+cis-threat-interpret
+    ↓
+proposed-threat.json
+    ↓
+human review / explicit conversion
+    ↓
+approved ThreatContext JSON
+    ↓
+cis-threat-analyze
+```
+
+Provider requests include only the contract, active catalog ID/name vocabulary, and
+untrusted advisory content. Provider errors and contract violations fail closed.
+Actual control relevance remains the deterministic Phase 2/3 result after an
+approved ThreatContext enters that pipeline. See
 [AI Threat Interpretation Contract](AI_THREAT_INTERPRETATION_CONTRACT.md) for the
 authority, grounding, provenance, adversarial-input, and conversion rules.

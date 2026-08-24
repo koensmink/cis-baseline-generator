@@ -1,8 +1,8 @@
 # AI Threat Interpretation Contract
 
-Phase 4A defines a provider-neutral, fail-closed boundary around future AI
-interpretation. It does not invoke a model, import a provider SDK, retrieve a
-document, or participate in control classification or prioritization.
+Phase 4A defines the provider-neutral, fail-closed contract. Phase 4B adds one
+optional OpenAI adapter behind that contract. Neither layer participates in control
+classification or prioritization, and neither retrieves source documents.
 
 ## Authority boundary
 
@@ -71,11 +71,63 @@ contract, policy, generation-parameter identity, and input hash are retained. Al
 contract models serialize with sorted keys and canonical collection ordering,
 without implicit timestamps or random identifiers.
 
-## Provider boundary
+## Phase 4B provider adapter
 
-No provider integration exists in Phase 4A. Phase 4B would require a separately
-reviewed adapter that accepts caller-supplied documents, applies this versioned
-contract, sends raw structured output through payload validation, and adds explicit
-privacy, retention, credential, error, and reproducibility controls. It must not
-bypass human approval or write Mandatory status, threat relevance, advisory action,
-or control mappings.
+`ThreatInterpretationProvider` is provider-neutral. The first implementation uses
+the OpenAI Responses API with strict JSON Schema output, no tools, no requested or
+retained reasoning trace, an explicit timeout, `store=false`, and bounded retries
+for transient failures only. Provider-specific imports remain isolated.
+
+The deterministic request builder supplies only:
+
+- trusted contract and authority-policy rules;
+- active threat-scenario, technique, and attack-path IDs and names; and
+- the caller-supplied advisory metadata and content, clearly labeled untrusted.
+
+It never sends CIS controls, Mandatory output, priority output, environment secrets,
+or customer data by default. The live catalog still validates every returned ID.
+Markdown, free text, malformed JSON, schema mismatches, forbidden fields, and
+blocking Phase 4A findings fail closed without repair.
+
+Credentials come only from `OPENAI_API_KEY` or an explicit in-memory caller value.
+They are not logged, serialized, placed in provenance, or included in errors.
+Provider privacy policy records only caller-configured region/retention identifiers,
+training-use permission, and whether sensitive or customer data is allowed; it does
+not claim provider guarantees. The default rejects potential secrets and personal
+data before any request.
+
+## Operator workflow
+
+1. Obtain advisory text out of band and save it locally.
+2. Run `cis-threat-interpret` with a structured-output-capable model.
+3. Inspect `proposed-threat.json` and its summary.
+4. Perform human approval and explicit conversion using the Phase 4A gate.
+5. Export the approved `ThreatContext` separately.
+6. Run `cis-threat-analyze` with that approved context.
+
+```bash
+OPENAI_API_KEY="<runtime-secret>" cis-threat-interpret advisory.txt \
+  --source-type vendor_advisory \
+  --source-name "Example Vendor" \
+  --source-reference "ADV-2026-001" \
+  --model "<structured-output-capable-model>" \
+  --generated-at 2026-08-24T12:00:00Z \
+  -o proposed-threat.json
+```
+
+The command accepts no URL and performs no fetching or live-feed ingestion. It
+writes `proposed-threat.json` with proposal, validation, and audit metadata plus
+`proposed-threat-summary.json`. Full source content and full raw provider responses
+are not persisted. Exit codes are 0 for a valid proposal, 2 for local input or
+configuration errors, 3 for provider/network failures, and 4 for blocked provider
+output.
+
+Provider output may be nondeterministic even with fixed generation parameters.
+Audit metadata retains provider/model identity, prompt and contract versions,
+generation-parameter identity, input and vocabulary hashes, request ID, and raw
+response hash. Deterministic behavior resumes after strict parsing at the Phase 4A
+boundary. No proposal is approved or converted automatically.
+
+For a manual live smoke test, use invented non-sensitive advisory text, configure a
+model that supports strict structured output, run the command above, and inspect
+both artifacts. Live calls are never part of automated tests.

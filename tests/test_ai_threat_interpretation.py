@@ -460,6 +460,10 @@ def test_forbidden_approval_modification_cannot_convert() -> None:
 
 def test_ai_package_has_no_provider_or_network_imports() -> None:
     package = Path("src/cis_pdf2csv/security_knowledge/threat_intelligence/ai")
-    contents = "\n".join(path.read_text() for path in package.rglob("*.py"))
+    contents = "\n".join(
+        path.read_text()
+        for path in package.glob("*.py")
+        if path.name not in {"provider_cli.py"}
+    )
     for forbidden in ("import openai", "import anthropic", "import requests", "import httpx", "import socket"):
         assert forbidden not in contents

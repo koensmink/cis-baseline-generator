@@ -131,6 +131,14 @@ def validate_interpretation(
         findings.append(_finding("AI_INPUT_SIZE_EXCEEDED", AIContractFindingSeverity.ERROR, object_id, "Input exceeds the contract maximum size."))
     if interpretation.input_document_id != document.document_id or interpretation.input_hash != document.content_hash or interpretation.provenance.input_document_hash != document.content_hash:
         findings.append(_finding("AI_INTERPRETATION_INPUT_MISMATCH", AIContractFindingSeverity.ERROR, object_id, "Interpretation input identity does not match the supplied document."))
+    metadata_matches = (
+        interpretation.source_type == document.source_type
+        and interpretation.source_name == document.source_name
+        and interpretation.source_reference == document.source_reference
+        and interpretation.published_at == document.published_at
+    )
+    if not metadata_matches:
+        findings.append(_finding("AI_INTERPRETATION_DOCUMENT_METADATA_MISMATCH", AIContractFindingSeverity.ERROR, object_id, "Interpretation source metadata does not exactly match the caller-supplied document."))
     if interpretation.provenance.contract_id != contract.contract_id or interpretation.provenance.contract_version != contract.contract_version or interpretation.provenance.authority_policy_version != policy.policy_version:
         findings.append(_finding("AI_INTERPRETATION_CONTRACT_MISMATCH", AIContractFindingSeverity.ERROR, object_id, "Interpretation metadata does not match the governing contract and policy."))
 
@@ -188,16 +196,21 @@ def _matching(assertions: Mapping[str, Any], assertion_type: str, value: str) ->
 
 
 def _material_values(item: ProposedThreatInterpretation) -> list[tuple[str, str]]:
-    values: list[tuple[str, str]] = [("source_reference", item.source_reference)]
+    values: list[tuple[str, str]] = []
     values.extend(("threat_scenario_id", value) for value in item.proposed_threat_scenario_ids)
     values.extend(("technique_id", value) for value in item.proposed_technique_ids)
     values.extend(("attack_path_id", value) for value in item.proposed_attack_path_ids)
     values.extend(("affected_technology_family", value) for value in item.proposed_affected_technology_families)
-    if item.published_at is not None:
-        values.append(("published_at", item.published_at.isoformat()))
     if item.proposed_activity_state != ThreatActivityState.UNKNOWN:
         values.append(("activity_state", item.proposed_activity_state.value))
     return values
+
+
+def required_evidence_bindings(
+    interpretation: ProposedThreatInterpretation,
+) -> tuple[tuple[str, str], ...]:
+    """Return exact security-assertion bindings; never creates evidence."""
+    return tuple(sorted(_material_values(interpretation)))
 
 
 def _validate_catalog_ids(item: ProposedThreatInterpretation, catalog: SecurityKnowledgeCatalog, findings: list[AIContractFinding]) -> None:
@@ -232,6 +245,7 @@ def _minimum(left: Confidence, right: Confidence) -> Confidence:
 
 
 __all__ = [
+    "required_evidence_bindings",
     "validate_advisory_document",
     "validate_interpretation",
     "validate_interpretation_catalog_references",

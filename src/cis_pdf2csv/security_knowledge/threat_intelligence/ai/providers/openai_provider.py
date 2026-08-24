@@ -24,6 +24,7 @@ from ..schema import (
     ThreatAdvisoryDocument,
 )
 from ..validation import (
+    required_evidence_bindings,
     validate_advisory_document,
     validate_interpretation,
     validate_interpretation_payload,
@@ -32,6 +33,7 @@ from .base import ProviderInterpretationResult, ProviderWarning
 from .config import OpenAIProviderConfig
 from .errors import (
     AIProviderError,
+    EvidenceBindingDiagnostic,
     InvalidStructuredOutputError,
     MissingCredentialError,
     ProviderAuthenticationError,
@@ -166,11 +168,26 @@ class OpenAIThreatInterpretationProvider:
             interpretation.model_dump(mode="json"), policy=self.policy
         )
         if parsed is None or any(item.blocking for item in payload_findings):
-            raise ProviderContractValidationError("Phase 4A authority validation rejected provider output")
-        validation = validate_interpretation(parsed, document, catalog, policy=self.policy, contract=contract)
+            raise ProviderContractValidationError(
+                "Phase 4A authority validation rejected provider output",
+                findings=payload_findings,
+                evidence_bindings=_evidence_diagnostics(interpretation),
+            )
+        validation = validate_interpretation(
+            parsed,
+            document,
+            catalog,
+            policy=self.policy,
+            contract=contract,
+        )
         if validation.blocking:
             raise ProviderContractValidationError(
-                "Phase 4A contract validation blocked the proposed interpretation"
+                "Phase 4A contract validation blocked the proposed interpretation",
+                findings=validation.findings,
+                evidence_bindings=_evidence_diagnostics(parsed),
+                material_values=tuple(
+                    f"{kind}={value}" for kind, value in required_evidence_bindings(parsed)
+                ),
             )
         vocabulary = catalog_vocabulary(catalog)
         return ProviderInterpretationResult(
@@ -291,6 +308,26 @@ def _map_provider_error(error: Exception) -> AIProviderError:
             "model or endpoint does not support the required structured-output contract"
         )
     return ProviderTransientError("provider request failed")
+
+
+def _evidence_diagnostics(
+    interpretation: ProposedThreatInterpretation,
+) -> tuple[EvidenceBindingDiagnostic, ...]:
+    return tuple(
+        EvidenceBindingDiagnostic(
+            assertion_id=item.assertion_id,
+            assertion_type=item.assertion_type,
+            value=item.value,
+            source_locator=item.source_locator,
+            support_type=item.support_type,
+            explicitly_stated=item.explicitly_stated,
+            inference_required=item.inference_required,
+        )
+        for item in sorted(
+            interpretation.evidence_assertions,
+            key=lambda value: value.assertion_id,
+        )
+    )
 
 
 def _strict_json_schema(schema: dict[str, Any]) -> dict[str, Any]:

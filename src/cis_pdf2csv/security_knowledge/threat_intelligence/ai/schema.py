@@ -59,6 +59,25 @@ class EvidenceSupportType(str, Enum):
     EXTERNAL_MODEL_KNOWLEDGE = "external_model_knowledge"
 
 
+class EvidenceAssertionType(str, Enum):
+    """Closed vocabulary shared by provider output and Phase 4A validation."""
+
+    SOURCE_REFERENCE = "source_reference"
+    THREAT_SCENARIO_ID = "threat_scenario_id"
+    TECHNIQUE_ID = "technique_id"
+    ATTACK_PATH_ID = "attack_path_id"
+    AFFECTED_TECHNOLOGY_FAMILY = "affected_technology_family"
+    PUBLISHED_AT = "published_at"
+    ACTIVITY_STATE = "activity_state"
+    TARGETED_ASSET_CLASS = "targeted_asset_class"
+    CONFIDENCE = "confidence"
+    SEVERITY = "severity"
+    OBSERVED_AT = "observed_at"
+    VALID_FROM = "valid_from"
+    VALID_UNTIL = "valid_until"
+    CLAIM = "claim"
+
+
 class ThreatAdvisoryDocument(DeterministicModel):
     document_id: str = Field(min_length=1)
     source_type: ThreatSourceType
@@ -88,7 +107,7 @@ class ThreatAdvisoryReference(DeterministicModel):
 
 class InterpretationEvidenceAssertion(DeterministicModel):
     assertion_id: str = Field(min_length=1)
-    assertion_type: str = Field(min_length=1)
+    assertion_type: EvidenceAssertionType
     value: str = Field(min_length=1)
     source_locator: str = Field(min_length=1)
     evidence_excerpt_hash: str | None = Field(
@@ -202,6 +221,7 @@ __all__ = [
     "ApprovalModification",
     "ApprovalStatus",
     "DeterministicModel",
+    "EvidenceAssertionType",
     "EvidenceSupportType",
     "InterpretationEvidenceAssertion",
     "InterpretationValidationResult",

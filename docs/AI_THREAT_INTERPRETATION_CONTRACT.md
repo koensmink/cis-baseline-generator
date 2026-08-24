@@ -27,10 +27,27 @@ source locator, support type, confidence, and explicit-versus-inferred state. La
 source excerpts are not copied. Source-grounded interpretation is the default;
 `external_model_knowledge` is blocking and excluded from conversion.
 
+`assertion_type` uses a closed authoritative vocabulary. For AI-proposed threat
+scenarios, techniques, attack paths, affected technologies, and activity state, an
+evidence assertion must use the expected type and the exact canonical proposed
+value. The canonical value is not a source quote: `source_locator` identifies the
+supporting source wording. Missing or paraphrased bindings fail closed.
+
+Catalog IDs are interpretations rather than literal advisory text. When mapping
+source behavior to an existing catalog ID requires inference, the assertion value
+is still the exact catalog ID while `support_type` and `inference_required` retain
+the inference. The existing conservative confidence cap then applies. The adapter
+never manufactures an assertion from a proposed ID.
+
 `observed` and `actively_exploited` require explicitly stated evidence. Critical
 severity, exploitability, proof-of-concept status, or model confidence cannot imply
 exploitation. Affected technology also requires explicit grounding. Severity,
 confidence, and activity remain independent.
+
+Observed targeting or credential-reuse attempts may support `observed` malicious
+activity when that activity is explicitly stated. They do not establish
+`actively_exploited`. Severity, urgency, possible impact, exploitability, and
+proof-of-concept language remain insufficient to elevate activity state.
 
 ## Confidence calibration
 
@@ -62,6 +79,12 @@ instructions for review; Phase 4A intentionally does not implement full DLP.
 Source instructions are always evidence content and can never alter authority
 policy or authorize an external action.
 
+`source_reference`, source identity, and `published_at` originate from the
+caller-supplied `ThreatAdvisoryDocument` and are copied by the adapter. They do not
+require model-generated evidence assertions. Instead, Phase 4A compares them
+directly with the document metadata and blocks any mismatch, while document ID,
+content hash, and provenance hash protect input identity.
+
 ## Identity and reproducibility
 
 Document and interpretation IDs are caller-supplied or derived from stable identity
@@ -88,6 +111,12 @@ It never sends CIS controls, Mandatory output, priority output, environment secr
 or customer data by default. The live catalog still validates every returned ID.
 Markdown, free text, malformed JSON, schema mismatches, forbidden fields, and
 blocking Phase 4A findings fail closed without repair.
+
+When validation blocks output, `ProviderContractValidationError` carries structured
+finding codes/messages plus safe canonical evidence-binding diagnostics. These may
+include proposed canonical values, assertion types, locators, support types, and
+inference flags, but never the API key, advisory content, full raw response, or
+reasoning trace. Successful artifacts remain unchanged.
 
 Credentials come only from `OPENAI_API_KEY` or an explicit in-memory caller value.
 They are not logged, serialized, placed in provenance, or included in errors.

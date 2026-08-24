@@ -38,6 +38,7 @@ from cis_pdf2csv.security_knowledge.threat_intelligence.ai.schema import (
     AIContractFindingSeverity,
     ApprovalModification,
     ApprovalStatus,
+    EvidenceAssertionType,
     EvidenceSupportType,
     InterpretationEvidenceAssertion,
     ProposedThreatInterpretation,
@@ -62,10 +63,12 @@ NOW = datetime(2026, 8, 24, 12, tzinfo=UTC)
 CONTRACT = DEFAULT_AI_THREAT_INTERPRETATION_CONTRACT
 
 
-def evidence(assertion_id: str, kind: str, value: str) -> InterpretationEvidenceAssertion:
+def evidence(
+    assertion_id: str, kind: EvidenceAssertionType | str, value: str
+) -> InterpretationEvidenceAssertion:
     return InterpretationEvidenceAssertion(
         assertion_id=assertion_id,
-        assertion_type=kind,
+        assertion_type=EvidenceAssertionType(kind),
         value=value,
         source_locator=f"paragraph:{assertion_id}",
         support_type=EvidenceSupportType.EXPLICITLY_STATED,

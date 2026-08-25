@@ -3,28 +3,28 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-
 ALLOWED_IMPLEMENTATION_TYPES = {
     "settings_catalog": "settings_catalog",
     "administrative_template": "administrative_template",
     "endpoint_security": "endpoint_security",
     "custom_oma_uri": "custom_oma_uri",
-    "configuration_profile": "configuration_profile",
-    "compliance_policy": "compliance_policy",
-    "script": "script",
-    "manual_review": "manual_review",
+    "policy_csp": "policy_csp",
+    "registry": "registry",
+    "powershell": "powershell",
+    "not_manageable": "not_manageable",
+    "unknown": "unknown",
 }
 
 
 IMPLEMENTATION_TYPE_ALIASES = {
     "settings catalog": "settings_catalog",
     "settings_catalog": "settings_catalog",
-    "device restrictions": "configuration_profile",
-    "device restriction": "configuration_profile",
-    "device configuration": "configuration_profile",
-    "device configuration profile": "configuration_profile",
-    "configuration profile": "configuration_profile",
-    "intune configuration profile": "configuration_profile",
+    "device restrictions": "policy_csp",
+    "device restriction": "policy_csp",
+    "device configuration": "policy_csp",
+    "device configuration profile": "policy_csp",
+    "configuration profile": "policy_csp",
+    "intune configuration profile": "policy_csp",
     "administrative template": "administrative_template",
     "administrative templates": "administrative_template",
     "endpoint security": "endpoint_security",
@@ -32,13 +32,14 @@ IMPLEMENTATION_TYPE_ALIASES = {
     "custom oma uri": "custom_oma_uri",
     "oma-uri": "custom_oma_uri",
     "oma uri": "custom_oma_uri",
-    "compliance": "compliance_policy",
-    "compliance policy": "compliance_policy",
-    "powershell": "script",
-    "powershell script": "script",
-    "script": "script",
-    "manual triage": "manual_review",
-    "manual review": "manual_review",
+    "policy csp": "policy_csp",
+    "registry": "registry",
+    "powershell": "powershell",
+    "powershell script": "powershell",
+    "script": "powershell",
+    "manual triage": "unknown",
+    "manual review": "unknown",
+    "not manageable": "not_manageable",
 }
 
 
@@ -47,10 +48,11 @@ ALLOWED_INTUNE_AREAS = {
     "administrative_template": "Administrative Templates",
     "endpoint_security": "Endpoint Security",
     "custom_oma_uri": "Custom OMA-URI",
-    "configuration_profile": "Configuration Profile",
-    "compliance_policy": "Compliance Policy",
-    "script": "Scripts",
-    "manual_review": "Manual Review",
+    "policy_csp": "Policy CSP",
+    "registry": "Registry",
+    "powershell": "PowerShell",
+    "not_manageable": "Not Manageable",
+    "unknown": "Manual Review",
 }
 
 
@@ -85,6 +87,7 @@ class NormalizedSuggestion:
     suggested_value: str
     confidence: float
     reasoning: str
+    suggested_catalog_identifier: str | None
     mapping_source: str
     needs_validation: bool
     normalization_notes: list[str]
@@ -132,15 +135,19 @@ def _normalize_implementation_type(value: Any) -> tuple[str, str | None]:
         return IMPLEMENTATION_TYPE_ALIASES[text], None
     if text in ALLOWED_IMPLEMENTATION_TYPES:
         return text, None
-    return "manual_review", f"Unknown implementation type '{value}' mapped to manual_review"
+    return "unknown", f"Unknown implementation type '{value}' mapped to unknown"
 
 
-def _normalize_intune_area(value: Any, implementation_type: str) -> tuple[str, str | None]:
+def _normalize_intune_area(
+    value: Any, implementation_type: str
+) -> tuple[str, str | None]:
     text = _clean_text(value).lower()
     if text in AREA_ALIASES:
         return AREA_ALIASES[text], None
     if implementation_type in ALLOWED_INTUNE_AREAS:
-        return ALLOWED_INTUNE_AREAS[implementation_type], f"Unknown intune area '{value}' normalized from implementation type"
+        return ALLOWED_INTUNE_AREAS[
+            implementation_type
+        ], f"Unknown intune area '{value}' normalized from implementation type"
     return "Manual Review", f"Unknown intune area '{value}' mapped to Manual Review"
 
 
@@ -168,16 +175,15 @@ def _looks_like_free_text_value(value: str) -> bool:
     if any(marker in low for marker in heuristic_markers):
         return True
 
-    if len(value) > 120:
-        return True
-
-    return False
+    return len(value) > 120
 
 
 def normalize_suggestion_dict(raw: dict[str, Any]) -> NormalizedSuggestion:
     notes: list[str] = []
 
-    impl, impl_note = _normalize_implementation_type(raw.get("suggested_implementation_type"))
+    impl, impl_note = _normalize_implementation_type(
+        raw.get("suggested_implementation_type")
+    )
     if impl_note:
         notes.append(impl_note)
 
@@ -196,13 +202,15 @@ def normalize_suggestion_dict(raw: dict[str, Any]) -> NormalizedSuggestion:
 
     needs_validation = False
 
-    if impl == "manual_review":
+    if impl == "unknown":
         needs_validation = True
-        notes.append("Implementation type is manual_review")
+        notes.append("Implementation method is unknown")
 
     if _looks_like_free_text_value(suggested_value):
         needs_validation = True
-        notes.append("Suggested value looks like analyst text instead of a deployable setting value")
+        notes.append(
+            "Suggested value looks like analyst text instead of a deployable setting value"
+        )
 
     if confidence < 0.70:
         needs_validation = True
@@ -215,7 +223,10 @@ def normalize_suggestion_dict(raw: dict[str, Any]) -> NormalizedSuggestion:
         suggested_value=suggested_value,
         confidence=confidence,
         reasoning=reasoning,
-        mapping_source="llm",
+        suggested_catalog_identifier=(
+            _clean_text(raw.get("suggested_catalog_identifier")) or None
+        ),
+        mapping_source=_clean_text(raw.get("candidate_source")) or "llm",
         needs_validation=needs_validation,
         normalization_notes=notes,
     )
@@ -231,6 +242,7 @@ def normalize_suggestions(records: list[dict[str, Any]]) -> list[dict[str, Any]]
         }
 
         ns = normalize_suggestion_dict(record)
+        mapping_status = str(record.get("mapping_status", "candidate"))
 
         normalized.append(
             {
@@ -241,8 +253,13 @@ def normalize_suggestions(records: list[dict[str, Any]]) -> list[dict[str, Any]]
                 "suggested_value": ns.suggested_value,
                 "confidence": ns.confidence,
                 "reasoning": ns.reasoning,
+                "suggested_catalog_identifier": ns.suggested_catalog_identifier,
                 "mapping_source": ns.mapping_source,
-                "needs_validation": ns.needs_validation,
+                "mapping_status": mapping_status,
+                "verification": record.get("verification", {}),
+                "needs_validation": (
+                    ns.needs_validation or mapping_status != "verified"
+                ),
                 "normalization_notes": "; ".join(ns.normalization_notes),
             }
         )

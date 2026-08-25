@@ -17,7 +17,7 @@ from .exporters import (
     write_suggested_mappings_jsonl,
 )
 from .llm_fallback import OpenAILLMClient
-from .models import MappingInputControl
+from .models import MappingInputControl, MappingStatus
 from .resolver import resolve_controls
 from .suggestion_normalizer import normalize_suggestions
 
@@ -35,7 +35,9 @@ def _load_controls_jsonl(path: Path) -> list[MappingInputControl]:
             try:
                 controls.append(MappingInputControl(**json.loads(line)))
             except (json.JSONDecodeError, ValidationError, TypeError) as exc:
-                raise ValueError(f"Invalid mapping input on line {line_number}: {exc}") from exc
+                raise ValueError(
+                    f"Invalid mapping input on line {line_number}: {exc}"
+                ) from exc
 
     return controls
 
@@ -106,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
     suggestions = result.suggestions
 
     normalized_suggestions = normalize_suggestions(
-        [suggestion.model_dump() for suggestion in suggestions]
+        [suggestion.model_dump(mode="json") for suggestion in suggestions]
     )
 
     write_baseline_csv(mappings, output_dir / "baseline.csv")
@@ -118,27 +120,32 @@ def main(argv: list[str] | None = None) -> int:
     )
     write_conflicts_csv(conflicts, output_dir / "conflicts.csv")
 
-    manual_count = len([m for m in mappings if m.implementation_type == "manual_review"])
+    verified_count = sum(
+        item.mapping_status == MappingStatus.VERIFIED for item in mappings
+    )
+    unverified_count = sum(
+        item.mapping_status == MappingStatus.UNVERIFIED for item in mappings
+    )
+    manual_count = sum(
+        item.mapping_status == MappingStatus.MANUAL_REVIEW for item in mappings
+    )
     needs_validation_count = len(
         [s for s in normalized_suggestions if s.get("needs_validation")]
     )
 
     table = Table(title="cis-intune-map summary")
-    table.add_column("Controls", justify="right")
-    table.add_column("Mapped", justify="right")
-    table.add_column("Manual review", justify="right")
-    table.add_column("Conflicts", justify="right")
-    table.add_column("Suggestions", justify="right")
-    table.add_column("Needs validation", justify="right")
-
-    table.add_row(
-        str(len(controls)),
-        str(len(mappings) - manual_count),
-        str(manual_count),
-        str(len(conflicts)),
-        str(len(normalized_suggestions)),
-        str(needs_validation_count),
-    )
+    table.add_column("Metric")
+    table.add_column("Count", justify="right")
+    for label, count in (
+        ("Controls", len(controls)),
+        ("Verified", verified_count),
+        ("Unverified", unverified_count),
+        ("Manual review", manual_count),
+        ("Conflicts", len(conflicts)),
+        ("Suggestions", len(normalized_suggestions)),
+        ("Needs validation", needs_validation_count),
+    ):
+        table.add_row(label, str(count))
 
     console.print(table)
 

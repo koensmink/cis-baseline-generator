@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Protocol
 
-from .models import IntuneMapping, SuggestedMapping
+from .models import CandidateSource, IntuneMapping, MappingStatus, SuggestedMapping
 
 
 class LLMClient(Protocol):
@@ -20,6 +20,7 @@ class HeuristicLLMClient:
             "suggested_implementation_type": "settings_catalog",
             "suggested_intune_area": "Manual Triage",
             "suggested_setting_name": f"Review {mapping.title}",
+            "suggested_catalog_identifier": None,
             "suggested_value": str(mapping.value) if mapping.value is not None else "",
             "confidence": 0.35,
             "reasoning": "Heuristic fallback generated because no external LLM client was provided.",
@@ -51,8 +52,10 @@ class OpenAILLMClient:
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
             if self.cache_path.exists():
                 try:
-                    self._cache = json.loads(self.cache_path.read_text(encoding="utf-8"))
-                except Exception:
+                    self._cache = json.loads(
+                        self.cache_path.read_text(encoding="utf-8")
+                    )
+                except (OSError, json.JSONDecodeError):
                     self._cache = {}
 
     def _cache_key(self, mapping: IntuneMapping) -> str:
@@ -152,8 +155,9 @@ class OpenAILLMClient:
         for attempt in range(self.max_retries + 1):
             try:
                 return self._call_openai_batch(mappings)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - provider SDK errors are heterogeneous
                 import traceback
+
                 print(f"[LLM retry {attempt}] {type(e).__name__}: {e}")
                 traceback.print_exc()
                 time.sleep(1)
@@ -165,7 +169,8 @@ class OpenAILLMClient:
             "Return ONLY valid JSON. No markdown, no explanation.\n"
             "Schema:\n"
             "{ 'suggestions': [ { cis_id, suggested_implementation_type, "
-            "suggested_intune_area, suggested_setting_name, suggested_value, confidence, reasoning } ] }\n"
+            "suggested_intune_area, suggested_setting_name, suggested_catalog_identifier, "
+            "suggested_value, confidence, reasoning } ] }\n"
             "'confidence' must be a numeric value between 0.0 and 1.0. "
             "Do not use strings like High, Medium, or Low. "
             "'suggested_value' must always be a string."
@@ -195,7 +200,7 @@ class OpenAILLMClient:
 
         try:
             data = json.loads(raw)
-        except Exception:
+        except json.JSONDecodeError:
             print("INVALID JSON FROM LLM:")
             print(raw)
             return [self._fallback(m) for m in mappings]
@@ -221,11 +226,16 @@ class OpenAILLMClient:
                     "suggested_setting_name": item.get(
                         "suggested_setting_name", f"Review {original.title}"
                     ),
+                    "suggested_catalog_identifier": item.get(
+                        "suggested_catalog_identifier"
+                    ),
                     "suggested_value": self._normalize_suggested_value(
                         item.get("suggested_value", original.value),
                         original.value,
                     ),
-                    "confidence": self._normalize_confidence(item.get("confidence", 0.5)),
+                    "confidence": self._normalize_confidence(
+                        item.get("confidence", 0.5)
+                    ),
                     "reasoning": item.get("reasoning", "LLM generated"),
                 }
             )
@@ -243,6 +253,7 @@ class OpenAILLMClient:
             "suggested_implementation_type": "settings_catalog",
             "suggested_intune_area": "Manual Triage",
             "suggested_setting_name": f"Review {m.title}",
+            "suggested_catalog_identifier": None,
             "suggested_value": self._normalize_suggested_value(m.value, m.value),
             "confidence": 0.35,
             "reasoning": "Fallback due to incomplete LLM response",
@@ -255,16 +266,24 @@ def suggest_manual_review_mappings(
 ) -> list[SuggestedMapping]:
     llm = client or HeuristicLLMClient()
 
-    manual_review = [m for m in mappings if m.implementation_type == "manual_review"]
+    manual_review = [
+        m for m in mappings if m.mapping_status == MappingStatus.MANUAL_REVIEW
+    ]
     if not manual_review:
         return []
 
     data = llm.suggest_mappings_batch(manual_review)
 
+    source = (
+        CandidateSource.HEURISTIC
+        if isinstance(llm, HeuristicLLMClient)
+        else CandidateSource.LLM
+    )
     return [
         SuggestedMapping(
             cis_id=m.cis_id,
             title=m.title,
+            candidate_source=source,
             **d,
         )
         for m, d in zip(manual_review, data)

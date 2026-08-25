@@ -208,11 +208,30 @@ intune_out/
 └── suggested_mappings.jsonl
 ```
 
-Current deterministic mappings target supported Windows Server controls. Unsupported benchmark families are routed to manual review instead of running Windows-specific rules.
+Current deterministic rules target supported Windows Server controls. A rule match
+creates a candidate, not automatically a verified mapping. The authoritative
+catalog resolver compares exact identifiers, implementation methods, platforms,
+values, and catalog provenance. The CLI summary reports `Verified`, `Unverified`,
+and `Manual review` separately.
+
+`baseline.csv` and `intune_policies.json` contain only verified mappings.
+`manual_review.csv` contains unverified candidates and explicit manual-review
+fallbacks. CSV and JSON fields keep candidate source/confidence separate from
+mapping status, verification source, match method, catalog version, and reason
+codes.
+
+The current `repository_local_authoritative_catalog` is a deliberately limited
+local catalog (`local-test-v1`), not a claim of complete or current Microsoft
+metadata. A future Microsoft Graph metadata loader can implement the typed catalog
+interface without changing verification rules.
 
 ## Optional Intune LLM Fallback
 
-LLM assistance applies only to controls unresolved after deterministic mapping. Suggestions are advisory and require validation.
+LLM assistance applies only to controls unresolved after deterministic mapping.
+Suggestions are defensively normalized, converted to typed candidates, and passed
+through the same authoritative verifier. An LLM candidate always remains
+unverified, even with confidence `1.0` and an exact catalog identifier. Confidence
+is proposal metadata, never verification authority.
 
 ### Using an OpenAI API key
 

@@ -182,7 +182,28 @@ See [Threat-Informed Prioritization](docs/THREAT_INFORMED_PRIORITIZATION.md) and
 
 ### Intune Mapping
 
-The Intune mapper is a downstream implementation engine. Current deterministic rule packs target supported Windows Server controls and produce baseline, manual-review, conflict, policy, and optional suggestion artifacts.
+The Intune mapper is a downstream implementation engine. Current deterministic
+rule packs target supported Windows Server controls and produce typed mapping
+candidates. Deterministic selection is not itself verification: every selected
+candidate passes through the separate authoritative catalog resolver before it can
+be marked `verified`.
+
+Candidate confidence records how strongly a rule, heuristic, or LLM supports its
+proposal. Verification records whether an exact catalog identifier, implementation
+method, platform, value schema, and authoritative provenance agree. Confidence can
+never override a verification failure, and an LLM candidate can never become
+`verified`.
+
+The bundled catalog is deliberately small and repository-maintained. It exists to
+exercise the verification boundary and covers only explicitly listed mappings; it
+is not a complete or current Microsoft Intune metadata export. Future Microsoft
+Graph or other metadata loaders implement the same catalog interface without
+changing the resolver.
+
+`baseline.csv` and `intune_policies.json` contain verified mappings only.
+`manual_review.csv` retains both unverified candidates and manual-review fallbacks,
+including machine-readable verification reason codes. Conflict and normalized
+suggestion artifacts remain separate.
 
 Unsupported benchmark families do not run Windows-specific rules.
 

@@ -32,6 +32,33 @@ Constraints:
 - keep Windows Server 2025 as the first supported target
 - structure the code so Windows Server 2016/2019/2022 can be added later with shared rule packs and overrides
 
+## Authoritative verification extension
+
+The implemented next stage separates proposal from verification:
+
+```text
+NormalizedControl
+       ├── deterministic rule candidate
+       └── normalized LLM/heuristic candidate
+                       ↓
+             MappingCandidate
+                       ↓
+        AuthoritativeCatalogResolver
+              ├── verified
+              └── unverified → manual triage
+```
+
+`candidate_confidence` describes proposal quality; it is independent from
+`mapping_status`. Only the catalog resolver produces `verified`, after an exact
+identifier, implementation method, target platform, value-schema, and provenance
+check. Broad keywords and names are insufficient. LLM output cannot be verification
+authority and always retains `LLM_CANDIDATE_UNVERIFIED`.
+
+The first catalog implementation is a small local, typed fixture with explicit
+scope and provenance. It is not a complete Microsoft catalog. The
+`AuthoritativeCatalog` interface is the integration point for a future offline
+Microsoft Graph metadata snapshot or another governed metadata source.
+
 Before coding:
 - list files to create/change
 - show the migration plan from current rules.py

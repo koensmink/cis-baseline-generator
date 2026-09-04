@@ -85,6 +85,10 @@ def test_intune_bundle_preserves_assignments_assets_and_potential_conflicts() ->
     assert snapshot.setting_count == 2
     assert snapshot.asset_count == 1
     assert len(snapshot.potential_conflicts) == 1
+    assert {item.value for policy in policies for item in policy.settings} == {
+        '"disabled"',
+        '"enabled"',
+    }
     assert {item.kind.value for item in policies[0].assignments} == {
         "include",
         "exclude",

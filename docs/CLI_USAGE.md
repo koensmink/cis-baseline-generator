@@ -2,7 +2,7 @@
 
 This document contains the operational command reference for the CIS Security Analysis and Baseline Engineering Toolkit.
 
-The package currently installs eight console commands:
+The package currently installs nine console commands:
 
 | Command | Purpose |
 |---|---|
@@ -11,6 +11,7 @@ The package currently installs eight console commands:
 | `cis-intune-map` | Map parser-produced JSONL to supported Intune artifacts |
 | `cis-baseline-plan` | Enrich controls and create deterministic implementation waves |
 | `cis-environment-scan` | Inventory declared Intune or GPO configuration for gap analysis |
+| `cis-baseline-assess` | Compare verified mappings with a current-state snapshot, fail closed |
 | `cis-threat-analyze` | Resolve approved threat contexts and produce a deterministic advisory control-priority overlay |
 | `cis-threat-interpret` | Use the optional OpenAI adapter to create an untrusted structured proposal from a local advisory |
 | `cis-threat-approve` | Record explicit human review and optionally convert an approved proposal to a `ThreatContext` |
@@ -295,6 +296,41 @@ must still be validated. Missing evidence is `not_observed`, never automatically
 
 See [Environment Scan](ENVIRONMENT_SCAN.md) for the schema, permissions, source
 coverage, limitations, and downstream contract.
+
+## Baseline Gap Assessment
+
+```bash
+cis-baseline-assess controls.jsonl \
+  --current-state current-state.json \
+  -o assessment
+```
+
+Optional approved and time-bounded exceptions are supplied as a JSON array:
+
+```bash
+cis-baseline-assess controls.jsonl \
+  --current-state current-state.json \
+  --exceptions exceptions.json \
+  --at-time 2026-09-04T12:00:00Z \
+  -o assessment
+```
+
+`--at-time` makes exception evaluation reproducible and must contain a timezone.
+The command returns status `2` after writing the results when the current-state
+snapshot is partial.
+
+| File | Purpose |
+|---|---|
+| `assessment.csv` | Complete flat control assessment |
+| `assessment.jsonl` | Complete machine-readable control assessment |
+| `assessment.json` | Assessment envelope with provenance and warnings |
+| `action-required.csv` | Non-compliance, conflicts, missing measurement, and manual evidence work |
+| `assessment-summary.json` | Counts and current-state trust metadata |
+
+Only verified authoritative mappings are compared. A matching declared policy is
+called `declared_compliant`, not effective compliance. Missing evidence never
+becomes automatic non-compliance. See
+[Baseline Assessment](BASELINE_ASSESSMENT.md).
 
 ## Benchmark Diff
 

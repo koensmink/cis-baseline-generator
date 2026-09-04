@@ -34,3 +34,4 @@ cis-threat-interpret = "cis_pdf2csv.security_knowledge.threat_intelligence.ai.pr
 cis-threat-approve = "cis_pdf2csv.security_knowledge.threat_intelligence.ai.approval_cli:main"
 cis-baseline-plan = "cis_pdf2csv.baseline_planner.cli:main"
 cis-environment-scan = "cis_pdf2csv.environment_scan.cli:main"
+cis-baseline-assess = "cis_pdf2csv.baseline_assessment.cli:main"

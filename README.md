@@ -20,6 +20,7 @@ A deterministic toolkit for parsing CIS Benchmarks, evaluating Mandatory control
 - Uses optional LLM suggestions only for unresolved Intune mappings; suggestions remain advisory.
 - Produces deterministic risk enrichment, work packages, and phased implementation waves.
 - Inventories declared Intune or GPO configuration as a provenance-bearing current-state snapshot.
+- Compares verified CIS-to-setting mappings with declared configuration and creates an auditable gap assessment.
 
 ## Architecture
 
@@ -154,6 +155,21 @@ hashes, and collection errors. It never treats missing observations as proof of
 non-compliance. See [Environment Scan and Remote Operation](docs/ENVIRONMENT_SCAN.md)
 for the architecture, permissions, runner options, GPO workflow, and security
 guidance.
+
+### Assess baseline gaps
+
+```bash
+cis-baseline-assess controls.jsonl \
+  --current-state current-state.json \
+  -o assessment
+```
+
+Only authoritative, verified setting mappings can produce
+`declared_compliant` or `declared_non_compliant`. Unknown mappings, missing
+observations, manual controls, conflicts, and incomplete scans remain explicit
+review states. The result describes declared policy configuration; it does not
+claim effective per-device compliance. See
+[Baseline Assessment](docs/BASELINE_ASSESSMENT.md).
 
 See [CLI Usage](docs/CLI_USAGE.md) for all commands, options, container examples, benchmark diff usage, and LLM fallback.
 
@@ -307,6 +323,7 @@ For parser-specific compatibility and failure behavior, see [CIS Benchmark Parse
 | Document | Purpose |
 |---|---|
 | [CLI Usage](docs/CLI_USAGE.md) | Commands, options, examples, containers, diff, and LLM fallback |
+| [Baseline Assessment](docs/BASELINE_ASSESSMENT.md) | Fail-closed gap assessment, exceptions, outputs, and trust boundaries |
 | [CIS Benchmark Parser](docs/CIS_BENCHMARK_PARSER.md) | Parser behavior, inputs, outputs, traceability, profiles, and limitations |
 | [Mandatory Control Engine — Phase 1](docs/mandatory-control-phase1.md) | Mandatory classification and boundary reasoning |
 | [Security Knowledge Model](docs/SECURITY_KNOWLEDGE_MODEL.md) | Normative knowledge model |

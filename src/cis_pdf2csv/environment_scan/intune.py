@@ -176,6 +176,32 @@ def _canonical_json(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def _observed_value(instance: Mapping[str, Any]) -> str:
+    candidates: list[object] = []
+
+    def collect(value: object) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key == "value" and isinstance(child, (str, int, float, bool)):
+                    candidates.append(child)
+                else:
+                    collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    collect(instance)
+    unique = []
+    for candidate in candidates:
+        if candidate not in unique:
+            unique.append(candidate)
+    if len(unique) == 1:
+        return _canonical_json(unique[0])
+    if unique:
+        return _canonical_json(unique)
+    return _canonical_json(instance)
+
+
 def _configuration_settings(policy: Mapping[str, Any]) -> tuple[ObservedSetting, ...]:
     policy_id = str(policy.get("id", "unknown"))
     policy_name = str(policy.get("name") or policy.get("displayName") or policy_id)
@@ -187,7 +213,7 @@ def _configuration_settings(policy: Mapping[str, Any]) -> tuple[ObservedSetting,
         instances = tuple(_walk_setting_instances(row.get("settingInstance", row)))
         for instance in instances:
             identity = str(instance.get("settingDefinitionId", "unknown"))
-            value = _canonical_json(instance)
+            value = _observed_value(instance)
             key = (identity, value)
             if key in seen:
                 continue

@@ -2,7 +2,7 @@
 
 This document contains the operational command reference for the CIS Security Analysis and Baseline Engineering Toolkit.
 
-The package currently installs seven console commands:
+The package currently installs eight console commands:
 
 | Command | Purpose |
 |---|---|
@@ -10,6 +10,7 @@ The package currently installs seven console commands:
 | `cis-mandatory-analyze` | Run deterministic Mandatory-control analysis and attack-path coverage |
 | `cis-intune-map` | Map parser-produced JSONL to supported Intune artifacts |
 | `cis-baseline-plan` | Enrich controls and create deterministic implementation waves |
+| `cis-environment-scan` | Inventory declared Intune or GPO configuration for gap analysis |
 | `cis-threat-analyze` | Resolve approved threat contexts and produce a deterministic advisory control-priority overlay |
 | `cis-threat-interpret` | Use the optional OpenAI adapter to create an untrusted structured proposal from a local advisory |
 | `cis-threat-approve` | Record explicit human review and optionally convert an approved proposal to a `ThreatContext` |
@@ -21,8 +22,8 @@ There is currently no standalone Security Knowledge or catalog CLI.
 ## Installation
 
 ```bash
-git clone https://github.com/koensmink/cis-intune-baseline-generator.git
-cd cis-intune-baseline-generator
+git clone https://github.com/koensmink/cis-baseline-generator.git
+cd cis-baseline-generator
 python -m pip install -e .
 ```
 
@@ -229,6 +230,71 @@ Wave placement accounts for security priority, profile, implementation impact,
 and explicit prerequisites. Work packages remain stable across phases. The plan
 includes manual-assessment requirements and deployment readiness, but it is not
 authorization to deploy a control.
+
+## Environment Scan
+
+### Live Intune inventory
+
+```bash
+export MS_GRAPH_ACCESS_TOKEN="<access-token>"
+
+cis-environment-scan \
+  --source intune \
+  --tenant-id "<tenant-id>" \
+  -o current-state.json
+```
+
+The token is read from `MS_GRAPH_ACCESS_TOKEN` by default and is never written to
+the snapshot. Use `--access-token-env NAME` to select a different environment
+variable. A live scan requests Settings Catalog policies and settings, legacy
+device configurations, imported Group Policy configurations, assignments,
+exclusions, and managed-device inventory.
+
+If an individual Graph collection cannot be read, the snapshot is emitted as
+`partial` with explicit `collection_errors`; unavailable data is not silently
+treated as empty compliance evidence. The command returns a non-zero status for
+a partial collection so unattended workflows cannot mistake it for a complete scan.
+
+### Offline Intune Graph bundle
+
+```bash
+cis-environment-scan \
+  --source intune \
+  --input intune-export.json \
+  -o current-state.json
+```
+
+The JSON object can contain `configurationPolicies`, `deviceConfigurations`,
+`groupPolicyConfigurations`, and `managedDevices` as arrays or Graph collection
+objects with a `value` array. Expanded `settings` and `assignments` are accepted;
+live-collector fields `_settings` and `_assignments` are also supported.
+
+### GPO report inventory
+
+Export one or all GPO reports as XML on a domain-management workstation, then
+transfer the report through the organisation's approved process:
+
+```powershell
+Get-GPOReport -All -ReportType Xml -Path .\all-gpos.xml
+```
+
+Scan one combined report, one individual report, or a directory of reports:
+
+```bash
+cis-environment-scan --source gpo --input all-gpos.xml -o current-state.json
+cis-environment-scan --source gpo --input gpo-reports/ -o current-state.json
+```
+
+### Snapshot trust boundary
+
+`current-state.json` distinguishes declared configuration and device inventory
+from effective device state. Duplicate setting identities with different values
+are reported as `potential_conflicts`; assignment overlap and resultant policy
+must still be validated. Missing evidence is `not_observed`, never automatically
+`non_compliant`.
+
+See [Environment Scan](ENVIRONMENT_SCAN.md) for the schema, permissions, source
+coverage, limitations, and downstream contract.
 
 ## Benchmark Diff
 

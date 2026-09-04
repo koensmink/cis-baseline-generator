@@ -26,3 +26,8 @@ temp/
 llm_cache.json
 report.md
 report_full.md
+
+# Customer environment inventory and exports
+current-state*.json
+intune-export*.json
+gpo-reports/

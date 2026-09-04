@@ -19,6 +19,7 @@ A deterministic toolkit for parsing CIS Benchmarks, evaluating Mandatory control
 - Maps supported Windows Server controls to Intune using deterministic rule packs.
 - Uses optional LLM suggestions only for unresolved Intune mappings; suggestions remain advisory.
 - Produces deterministic risk enrichment, work packages, and phased implementation waves.
+- Inventories declared Intune or GPO configuration as a provenance-bearing current-state snapshot.
 
 ## Architecture
 
@@ -36,8 +37,8 @@ output.
 ### Install
 
 ```bash
-git clone https://github.com/koensmink/cis-intune-baseline-generator.git
-cd cis-intune-baseline-generator
+git clone https://github.com/koensmink/cis-baseline-generator.git
+cd cis-baseline-generator
 python -m pip install -e .
 ```
 
@@ -130,6 +131,29 @@ cis-baseline-plan controls.jsonl -o implementation-plan --max-phase-size 75
 The input must be parser-produced `ControlRecord` JSONL. The output directory is
 created when needed, and `--max-phase-size` defaults to `75`. Structured CSV,
 JSONL, and JSON artifacts are written beneath `implementation-plan`.
+
+### Inventory the current environment
+
+Live Intune scan using a locally supplied Microsoft Graph access token:
+
+```bash
+export MS_GRAPH_ACCESS_TOKEN="<access-token>"
+cis-environment-scan --source intune -o current-state.json
+```
+
+Offline Intune export or GPO report:
+
+```bash
+cis-environment-scan --source intune --input intune-export.json -o current-state.json
+cis-environment-scan --source gpo --input gpo-reports/ -o current-state.json
+```
+
+The scanner records declared policies, settings, assignments, exclusions, managed
+device inventory, potential value conflicts, security-capability signals, source
+hashes, and collection errors. It never treats missing observations as proof of
+non-compliance. See [Environment Scan and Remote Operation](docs/ENVIRONMENT_SCAN.md)
+for the architecture, permissions, runner options, GPO workflow, and security
+guidance.
 
 See [CLI Usage](docs/CLI_USAGE.md) for all commands, options, container examples, benchmark diff usage, and LLM fallback.
 

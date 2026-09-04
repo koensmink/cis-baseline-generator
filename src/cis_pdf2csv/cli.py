@@ -13,7 +13,7 @@ from typing import Any
 from rich.console import Console
 from rich.table import Table
 
-from .parser import UnsupportedBenchmarkIdentityError, parse_controls
+from .parser import CISStructureError, parse_controls
 from .schema import ControlRecord
 
 console = Console()
@@ -260,7 +260,7 @@ def main(argv: list[str] | None = None) -> int:
             controls = parse_controls(pdf, profile_filter=args.profile)
             for c in controls:
                 all_records.append(ControlRecord(**c))
-    except UnsupportedBenchmarkIdentityError as exc:
+    except CISStructureError as exc:
         console.print(f"[red]{exc}[/red]")
         return 2
 

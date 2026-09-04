@@ -8,8 +8,10 @@ import pytest
 
 import fitz
 from cis_pdf2csv.cli import main as parser_main
+from cis_pdf2csv.intune_mapper.models import MappingInputControl
+from cis_pdf2csv.intune_mapper.resolver import resolve_control
 from cis_pdf2csv.parser import (
-    UnsupportedBenchmarkIdentityError,
+    CISStructureError,
     parse_controls,
 )
 
@@ -149,42 +151,78 @@ def test_parser_profile_filter_is_deterministic(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("metadata", "finding"),
+    "benchmark_title",
     [
-        (["Invented Unsupported Benchmark", "v1.0.0 - 17 August 2026"], "BENCHMARK_FAMILY_UNSUPPORTED"),
-        (
-            [
-                "CIS Microsoft Windows Server 2025 Benchmark",
-                "CIS Microsoft 365 Foundations Benchmark",
-                "v1.0.0 - 17 August 2026",
-            ],
-            "BENCHMARK_FAMILY_AMBIGUOUS",
-        ),
+        "CIS Microsoft Windows 11 Enterprise Benchmark",
+        "CIS Microsoft IIS 10 Benchmark",
+        "CIS Microsoft SQL Server 2022 Benchmark",
     ],
 )
-def test_parser_rejects_unsupported_or_ambiguous_identity(
+def test_unknown_benchmark_family_parses_with_generic_identity(
     tmp_path: Path,
-    metadata: list[str],
-    finding: str,
+    benchmark_title: str,
 ) -> None:
-    pdf = tmp_path / f"{finding}.pdf"
-    _write_pdf(pdf, [metadata, *_windows_pages()[1:]])
-    with pytest.raises(UnsupportedBenchmarkIdentityError, match=finding):
-        parse_controls(str(pdf))
+    pdf = tmp_path / "generic.pdf"
+    _write_pdf(
+        pdf,
+        [[benchmark_title, "v1.2.3 - 17 August 2026"], *_windows_pages()[1:]],
+    )
+
+    controls = parse_controls(str(pdf))
+
+    assert len(controls) == 2
+    assert {item["benchmark_name"] for item in controls} == {benchmark_title}
+    assert {item["benchmark_version"] for item in controls} == {"v1.2.3"}
 
 
-def test_parser_cli_reports_unsupported_identity_without_traceback(
+def test_generically_parsed_family_remains_fail_closed_for_intune(tmp_path: Path) -> None:
+    pdf = tmp_path / "windows-11.pdf"
+    _write_pdf(
+        pdf,
+        [
+            [
+                "CIS Microsoft Windows 11 Enterprise Benchmark",
+                "v1.2.3 - 17 August 2026",
+            ],
+            *_windows_pages()[1:],
+        ],
+    )
+    parsed = parse_controls(str(pdf))[0]
+
+    mapping, conflict = resolve_control(MappingInputControl.model_validate(parsed))
+
+    assert conflict is None
+    assert mapping.benchmark_family == "unknown"
+    assert mapping.reason_code == "UNSUPPORTED_BENCHMARK_FAMILY"
+    assert mapping.implementation_type == "manual_review"
+
+
+def test_parser_cli_reports_non_cis_structure_without_traceback(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    pdf = tmp_path / "unsupported.pdf"
+    pdf = tmp_path / "not-cis.pdf"
     output = tmp_path / "output.jsonl"
-    _write_pdf(pdf, [["Invented Unsupported Benchmark"], *_windows_pages()[1:]])
+    _write_pdf(pdf, [["Invented Product Manual"], *_windows_pages()[1:]])
     assert parser_main([str(pdf), "-o", str(output)]) == 2
     captured = capsys.readouterr()
-    assert "BENCHMARK_FAMILY_UNSUPPORTED" in captured.out
+    assert "CIS_STRUCTURE_NOT_DETECTED" in captured.out
     assert "Traceback" not in captured.out + captured.err
     assert not output.exists()
+
+
+def test_malformed_cis_document_fails_structural_validation(tmp_path: Path) -> None:
+    pdf = tmp_path / "malformed.pdf"
+    _write_pdf(
+        pdf,
+        [
+            ["CIS Invented Product Benchmark", "v1.0.0 - 17 August 2026"],
+            ["Introduction", "No recommendations here."],
+        ],
+    )
+
+    with pytest.raises(CISStructureError, match="CIS_STRUCTURE_NOT_DETECTED"):
+        parse_controls(str(pdf))
 
 
 def test_multiple_pdf_output_order_is_input_order_independent(tmp_path: Path) -> None:

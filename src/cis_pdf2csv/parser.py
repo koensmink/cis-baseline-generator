@@ -58,6 +58,11 @@ RE_M365_BENCHMARK_META = re.compile(
     re.IGNORECASE,
 )
 
+RE_GENERIC_BENCHMARK_META = re.compile(
+    r"\bCIS\s+(?P<name>.+?\s+Benchmark)\b",
+    re.IGNORECASE,
+)
+
 
 @dataclass(frozen=True)
 class BenchmarkIdentity:
@@ -67,7 +72,7 @@ class BenchmarkIdentity:
 
 
 class UnsupportedBenchmarkIdentityError(ValueError):
-    """Raised when parser input cannot be assigned one supported family."""
+    """Backward-compatible error for callers that imported the old parser gate."""
 
     def __init__(self, identity: BenchmarkIdentity) -> None:
         self.identity = identity
@@ -78,14 +83,20 @@ class UnsupportedBenchmarkIdentityError(ValueError):
 
 
 def detect_benchmark_identity(lines: list[str]) -> BenchmarkIdentity:
-    """Detect a supported family from benchmark-title evidence."""
+    """Detect family metadata without deciding whether the document is parseable."""
     evidence = " ".join(" ".join(line.split()) for line in lines[:50])
     windows_matches = list(RE_BENCHMARK_META.finditer(evidence))
     m365_matches = list(RE_M365_BENCHMARK_META.finditer(evidence))
     if windows_matches and m365_matches:
+        generic_match = RE_GENERIC_BENCHMARK_META.search(evidence)
+        benchmark_name = (
+            f"CIS {' '.join(generic_match.group('name').split())}"
+            if generic_match
+            else "Unknown CIS Benchmark"
+        )
         return BenchmarkIdentity(
             family="ambiguous",
-            benchmark_name="Unknown CIS Benchmark",
+            benchmark_name=benchmark_name,
             finding="BENCHMARK_FAMILY_AMBIGUOUS",
         )
     if windows_matches:
@@ -99,11 +110,19 @@ def detect_benchmark_identity(lines: list[str]) -> BenchmarkIdentity:
             family="microsoft-365-foundations",
             benchmark_name="CIS Microsoft 365 Foundations Benchmark",
         )
-    return BenchmarkIdentity(
-        family="unknown",
-        benchmark_name="Unknown CIS Benchmark",
-        finding="BENCHMARK_FAMILY_UNSUPPORTED",
-    )
+    generic_match = RE_GENERIC_BENCHMARK_META.search(evidence)
+    if generic_match:
+        name = " ".join(generic_match.group("name").split())
+        return BenchmarkIdentity(family="unknown", benchmark_name=f"CIS {name}")
+    return BenchmarkIdentity(family="unknown", benchmark_name="Unknown CIS Benchmark")
+
+
+class CISStructureError(ValueError):
+    """Raised when a PDF cannot be reliably recognized as a CIS benchmark."""
+
+    def __init__(self, code: str = "CIS_STRUCTURE_NOT_DETECTED") -> None:
+        self.code = code
+        super().__init__(f"{code}: reliable CIS benchmark structure was not detected")
 
 
 RE_VERSION_DATE = re.compile(
@@ -259,8 +278,8 @@ def extract_benchmark_meta(pdf_path: str) -> tuple[str, str, str]:
     lines = [l.strip() for l in text.splitlines() if l.strip()]
 
     identity = detect_benchmark_identity(lines)
-    if identity.finding is not None:
-        raise UnsupportedBenchmarkIdentityError(identity)
+    if identity.benchmark_name == "Unknown CIS Benchmark":
+        raise CISStructureError()
     name = identity.benchmark_name
     version = ""
     date = ""
@@ -411,6 +430,9 @@ def parse_controls(pdf_path: str, profile_filter: str | None = None) -> list[dic
                 current.get("applicability")
             )
             controls.append(current)
+
+    if not controls:
+        raise CISStructureError()
 
     if profile_filter:
         pf = profile_filter.upper()

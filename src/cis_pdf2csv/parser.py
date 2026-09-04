@@ -41,7 +41,7 @@ SECTION_CANONICAL_MAP = {
 
 RE_HEADER = re.compile(
     r"^(?P<id>\d+(?:\.\d+)+)\s+"
-    r"(?:\((?P<profile>L1|L2|NG)\)\s+)?"
+    r"(?:\((?P<profile>L1|L2|NG|BL)\)\s+)?"
     r"(?P<title>.+?)"
     r"(?:\s+\((?P<assessment>Automated|Manual)\))?"
     r"(?:\s+\([^)]+\))*\s*$"
@@ -209,6 +209,14 @@ def _is_plausible_control_or_section(match: re.Match[str]) -> bool:
         return True
 
     return len(title) <= 80 and not re.search(r"[,.;:]", title)
+
+
+def _assessment_from_header(header: str, match: re.Match[str]) -> str:
+    """Read the assessment marker even when other parenthesized suffixes precede it."""
+    assessments = re.findall(r"\((Automated|Manual)\)", header, re.IGNORECASE)
+    if assessments:
+        return assessments[-1].title()
+    return match.group("assessment") or "Unknown"
 
 
 def _is_appendix_start(line: str) -> bool:
@@ -415,13 +423,15 @@ def parse_controls(pdf_path: str, profile_filter: str | None = None) -> list[dic
 
                 if _is_real_control(sections):
                     current.update(sections)
-                    current["profile"] = _profile_from_applicability(
-                        current.get("applicability")
+                    current["profile"] = (
+                        current["profile"]
+                        if current["profile"] != "Unknown"
+                        else _profile_from_applicability(current.get("applicability"))
                     )
                     controls.append(current)
 
             control_id = m.group("id")
-            assessment = m.group("assessment") or "Unknown"
+            assessment = _assessment_from_header(header_candidate, m)
             raw_title = m.group("title")
 
             title, applicability_tag = _split_title_applicability(raw_title)
@@ -431,7 +441,7 @@ def parse_controls(pdf_path: str, profile_filter: str | None = None) -> list[dic
                 "benchmark_version": bench_version,
                 "benchmark_date": bench_date,
                 "control_id": control_id,
-                "profile": "Unknown",
+                "profile": m.group("profile") or "Unknown",
                 "title": title,
                 "assessment": assessment,
                 "applicability": applicability_tag,
@@ -468,8 +478,10 @@ def parse_controls(pdf_path: str, profile_filter: str | None = None) -> list[dic
 
         if _is_real_control(sections):
             current.update(sections)
-            current["profile"] = _profile_from_applicability(
-                current.get("applicability")
+            current["profile"] = (
+                current["profile"]
+                if current["profile"] != "Unknown"
+                else _profile_from_applicability(current.get("applicability"))
             )
             controls.append(current)
 

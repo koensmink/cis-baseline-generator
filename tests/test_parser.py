@@ -292,6 +292,40 @@ def test_version_like_rationale_text_does_not_split_control(tmp_path: Path) -> N
     assert "15.0 Sequoia" in (controls[0]["rationale"] or "")
 
 
+def test_bitlocker_profile_header_is_a_control_boundary(tmp_path: Path) -> None:
+    pages = _windows_pages()
+    pages.extend(
+        [
+            [
+                "0.0 Explicitly Not Mapped",
+                "18.9.7.1.3 (BL) Ensure the invented BitLocker setting is set to 'True' (checked) (Automated)",
+                "Profile Applicability",
+                "Level 1 (L1) + BitLocker (BL)",
+                "Level 2 (L2) + BitLocker (BL)",
+                "Description",
+                "Invented BitLocker description.",
+                "Audit",
+                "Run the invented BitLocker audit.",
+                "Remediation",
+                "Apply the invented BitLocker remediation.",
+            ]
+        ]
+    )
+    pdf = tmp_path / "bitlocker-profile.pdf"
+    _write_pdf(pdf, pages)
+
+    controls = parse_controls(str(pdf))
+
+    assert [item["control_id"] for item in controls] == [
+        "1.2.3",
+        "2.4.6",
+        "18.9.7.1.3",
+    ]
+    assert controls[-1]["profile"] == "BL"
+    assert controls[-1]["assessment"] == "Automated"
+    assert all(item["control_id"] != "0.0" for item in controls)
+
+
 def test_multiple_pdf_output_order_is_input_order_independent(tmp_path: Path) -> None:
     windows_pdf = tmp_path / "windows.pdf"
     m365_pdf = tmp_path / "m365.pdf"

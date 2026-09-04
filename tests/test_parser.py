@@ -225,6 +225,73 @@ def test_malformed_cis_document_fails_structural_validation(tmp_path: Path) -> N
         parse_controls(str(pdf))
 
 
+def test_toc_entries_and_appendix_content_are_not_controls(tmp_path: Path) -> None:
+    pdf = tmp_path / "structured-boundaries.pdf"
+    _write_pdf(
+        pdf,
+        [
+            [
+                "CIS Invented Product Benchmark",
+                "v1.0.0 - 17 August 2026",
+                "Table of Contents",
+                "9.9.9 Ensure the final recommendation (Automated) .......... 42",
+            ],
+            *_windows_pages()[1:],
+            [
+                "Appendix: Summary Table",
+                "0.0 Explicitly Not Mapped",
+                "9.9.9 Ensure the final recommendation (Automated)",
+                "Profile Applicability",
+                "Level 1",
+                "Audit",
+                "Appendix audit text.",
+            ],
+        ],
+    )
+
+    controls = parse_controls(str(pdf))
+
+    assert [item["control_id"] for item in controls] == ["1.2.3", "2.4.6"]
+    assert "Appendix" not in (controls[-1]["references"] or "")
+
+
+def test_duplicate_real_control_ids_fail_integrity_validation(tmp_path: Path) -> None:
+    pages = _windows_pages()
+    pages.append(
+        [
+            "2.4.6 A duplicate recommendation (Automated)",
+            "Profile Applicability",
+            "Level 1 - Member Server",
+            "Description",
+            "Duplicate description.",
+            "Audit",
+            "Duplicate audit.",
+            "Remediation",
+            "Duplicate remediation.",
+        ]
+    )
+    pdf = tmp_path / "duplicate.pdf"
+    _write_pdf(pdf, pages)
+
+    with pytest.raises(CISStructureError, match="CONTROL_BOUNDARIES_AMBIGUOUS"):
+        parse_controls(str(pdf))
+
+
+def test_version_like_rationale_text_does_not_split_control(tmp_path: Path) -> None:
+    pages = _windows_pages()
+    pages[1].insert(
+        pages[1].index("Impact Statement"),
+        "15.0 Sequoia, it is now disabled by default but should be enabled.",
+    )
+    pdf = tmp_path / "version-in-rationale.pdf"
+    _write_pdf(pdf, pages)
+
+    controls = parse_controls(str(pdf))
+
+    assert [item["control_id"] for item in controls] == ["1.2.3", "2.4.6"]
+    assert "15.0 Sequoia" in (controls[0]["rationale"] or "")
+
+
 def test_multiple_pdf_output_order_is_input_order_independent(tmp_path: Path) -> None:
     windows_pdf = tmp_path / "windows.pdf"
     m365_pdf = tmp_path / "m365.pdf"

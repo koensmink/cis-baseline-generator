@@ -129,6 +129,20 @@ RE_VERSION_DATE = re.compile(
     r"^v(?P<version>[0-9.]+)\s*[–-]\s*(?P<date>.+)$"
 )
 
+RE_TOC_DOTTED_LEADER = re.compile(r"\.{4,}")
+RE_APPENDIX_START = re.compile(
+    r"\bappendix:\s*(?:summary table|cis controls|change history)\b",
+    re.IGNORECASE,
+)
+RE_RECOMMENDATION_VERB = re.compile(
+    r"^(?:audit|configure|create|disable|enable|encrypt|ensure|establish|install|"
+    r"limit|maintain|remove|require|restrict|set|turn|use|verify)\b",
+    re.IGNORECASE,
+)
+
+MAX_CONTROL_PAGE_SPAN = 15
+MAX_CONTROL_SECTION_CHARS = 25_000
+
 
 def sha256_bytes(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
@@ -178,6 +192,28 @@ def _looks_like_control_start(line: str) -> bool:
     18.10.15.2 Ensure 'Enumerate administrator accounts on ...
     """
     return bool(re.match(r"^\d+(?:\.\d+)+\s+", line))
+
+
+def _looks_like_toc_header(header: str) -> bool:
+    """Reject recommendation-shaped table-of-contents entries."""
+    return bool(RE_TOC_DOTTED_LEADER.search(header))
+
+
+def _is_plausible_control_or_section(match: re.Match[str]) -> bool:
+    """Distinguish numbered CIS headings from version-like prose such as '15.0 Sequoia'."""
+    if match.group("profile") or match.group("assessment"):
+        return True
+
+    title = match.group("title").strip()
+    if RE_RECOMMENDATION_VERB.match(title):
+        return True
+
+    return len(title) <= 80 and not re.search(r"[,.;:]", title)
+
+
+def _is_appendix_start(line: str) -> bool:
+    """Detect the structural end of the benchmark recommendation body."""
+    return bool(RE_APPENDIX_START.search(line.strip()))
 
 
 def _consume_multiline_header(
@@ -329,10 +365,10 @@ def _is_real_control(sections: dict[str, str | None]) -> bool:
     Reject TOC blocks.
     Only accept if real CIS body sections exist.
     """
-    if sections.get("audit") or sections.get("remediation"):
-        return True
-
-    return bool(sections.get("applicability"))
+    return bool(
+        sections.get("applicability")
+        and (sections.get("audit") or sections.get("remediation"))
+    )
 
 
 def parse_controls(pdf_path: str, profile_filter: str | None = None) -> list[dict]:
@@ -354,12 +390,18 @@ def parse_controls(pdf_path: str, profile_filter: str | None = None) -> list[dic
     while i < len(lines):
         page, line = lines[i]
 
+        if controls and current is not None and _is_appendix_start(line):
+            break
+
         m = None
         last_header_index = i
 
         if _looks_like_control_start(line):
             header_candidate, last_header_index = _consume_multiline_header(lines, i)
-            m = RE_HEADER.match(header_candidate)
+            if not _looks_like_toc_header(header_candidate):
+                m = RE_HEADER.match(header_candidate)
+                if m and not _is_plausible_control_or_section(m):
+                    m = None
 
         if m:
             # Finalize previous control
@@ -434,6 +476,8 @@ def parse_controls(pdf_path: str, profile_filter: str | None = None) -> list[dic
     if not controls:
         raise CISStructureError()
 
+    _validate_control_integrity(controls)
+
     if profile_filter:
         pf = profile_filter.upper()
         controls = [
@@ -441,6 +485,23 @@ def parse_controls(pdf_path: str, profile_filter: str | None = None) -> list[dic
         ]
 
     return controls
+
+
+def _validate_control_integrity(controls: list[dict]) -> None:
+    control_ids: set[str] = set()
+    for control in controls:
+        control_id = str(control["control_id"])
+        if control_id in control_ids:
+            raise CISStructureError("CONTROL_BOUNDARIES_AMBIGUOUS")
+        control_ids.add(control_id)
+
+        page_span = int(control["page_end"]) - int(control["page_start"])
+        section_chars = sum(
+            len(str(control.get(field) or ""))
+            for field in set(SECTION_CANONICAL_MAP.values())
+        )
+        if page_span > MAX_CONTROL_PAGE_SPAN and section_chars > MAX_CONTROL_SECTION_CHARS:
+            raise CISStructureError("CONTROL_BOUNDARIES_AMBIGUOUS")
 
 
 def _utc_now():

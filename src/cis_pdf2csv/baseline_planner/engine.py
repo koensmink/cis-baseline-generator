@@ -33,10 +33,10 @@ class CategoryRule:
 
 CATEGORY_RULES = (
     # Specific rules must precede broader rules when scores are equal.
-    CategoryRule(SecurityCategory.ACCOUNT_POLICY, "Account Policy", ("account policy", "password history", "password age", "password length", "account lockout", "lockout duration", "lockout threshold"), ("weak account protection", "password-based compromise"), "Apply consistent account and password safeguards."),
+    CategoryRule(SecurityCategory.ACCOUNT_POLICY, "Account Policy", ("account policy", "password history", "password age", "password length", "minimum password", "maximum password", "password must", "store passwords", "reversible encryption", "account lockout", "lockout duration", "lockout threshold"), ("weak account protection", "password-based compromise"), "Apply consistent account and password safeguards."),
     CategoryRule(SecurityCategory.AUDIT_LOGGING, "Security Logging and Monitoring", ("audit", "event log", "logging", "log file", "syslog"), ("undetected malicious activity", "insufficient forensic evidence"), "Establish reliable security telemetry and audit evidence."),
     CategoryRule(SecurityCategory.DATA_PROTECTION, "Encryption and Data Protection", ("bitlocker", "encrypt", "encryption", "recovery key", "filevault"), ("data exposure", "offline access to protected data"), "Protect sensitive data at rest and in transit."),
-    CategoryRule(SecurityCategory.IDENTITY_ACCESS, "Authentication and Access Hardening", ("authentication", "credential", "ntlm", "password", "account lockout", "sign-in", "logon"), ("credential compromise", "unauthorized access"), "Strengthen authentication and access-control boundaries."),
+    CategoryRule(SecurityCategory.IDENTITY_ACCESS, "Authentication and Access Hardening", ("authentication", "credential", "ntlm", "password", "sign-in", "logon"), ("credential compromise", "unauthorized access"), "Strengthen authentication and access-control boundaries."),
     CategoryRule(SecurityCategory.PRIVILEGED_ACCESS, "Privileged Access Management", ("administrator", "privilege", "sudo", "admin account", "user rights"), ("privilege escalation", "unauthorized administrative activity"), "Reduce and monitor privileged access."),
     CategoryRule(SecurityCategory.REMOTE_ACCESS, "Remote Access Hardening", ("remote desktop", "rdp", "remote access", "winrm", "ssh"), ("unauthorized remote access", "lateral movement"), "Constrain and protect remote administration paths."),
     CategoryRule(SecurityCategory.NETWORK_SECURITY, "Network and Firewall Hardening", ("firewall", "network", "smb", "dns", "tls", "snmp", "port", "protocol"), ("network-based exploitation", "unauthorized lateral movement"), "Reduce exposed network paths and insecure protocols."),
@@ -70,21 +70,26 @@ CATEGORY_WEIGHT = {
 
 def _category(control: ControlRecord) -> CategoryRule:
     title = control.title.casefold()
-    supporting_text = " ".join(
-        filter(
-            None,
-            (control.description, control.rationale, control.remediation),
-        )
-    ).casefold()
-    matches = [
+    title_matches = [
         (
-            sum((5 * title.count(keyword)) + supporting_text.count(keyword) for keyword in rule.keywords),
+            sum(title.count(keyword) * len(keyword) for keyword in rule.keywords),
             index,
             rule,
         )
         for index, rule in enumerate(CATEGORY_RULES)
     ]
-    score, _, rule = max(matches, key=lambda item: (item[0], -item[1]))
+    score, _, rule = max(title_matches, key=lambda item: (item[0], -item[1]))
+    if score:
+        return rule
+
+    # Remediation is an implementation signal. Narrative rationale and impact text
+    # can mention adjacent technologies and must not determine categorisation.
+    remediation = (control.remediation or "").casefold()
+    remediation_matches = [
+        (sum(remediation.count(keyword) * len(keyword) for keyword in rule.keywords), index, rule)
+        for index, rule in enumerate(CATEGORY_RULES)
+    ]
+    score, _, rule = max(remediation_matches, key=lambda item: (item[0], -item[1]))
     return rule if score else DEFAULT_RULE
 
 
@@ -156,7 +161,7 @@ def _dependencies(control: ControlRecord, rule: CategoryRule, impact: PlanningLe
         dependencies.append("Confirm break-glass and administrative access")
     if rule.category == SecurityCategory.AUDIT_LOGGING:
         dependencies.append("Wave 0: Logging pipeline and retention")
-    text = f"{control.title} {control.description or ''} {control.remediation or ''}".casefold()
+    text = f"{control.title} {control.remediation or ''}".casefold()
     if any(word in text for word in ("bitlocker", "recovery key", "filevault")):
         dependencies.append("Wave 0: Recovery-key escrow and recovery test")
     if "ntlm" in text:
@@ -244,11 +249,15 @@ def build_plan(controls: list[ControlRecord], *, max_phase_size: int = 75) -> Ba
         work_packages=_work_packages(phased),
         implementation_phases=_implementation_phases(phased),
         prerequisites=(
-            "Confirm scope, ownership, exceptions, and success criteria",
-            "Capture the current configuration and application compatibility inventory",
-            "Validate monitoring, evidence collection, and retention",
-            "Document rollback criteria and test recovery procedures",
-            "Prepare pilot and representative validation groups",
+            "Confirm scope, control ownership, exceptions, and measurable success criteria",
+            "Validate required licences, platform versions, and management enrolment",
+            "Inventory current configuration, policy conflicts, and application compatibility",
+            "Define exclusions and confirm emergency and break-glass access",
+            "Validate monitoring, evidence collection, alerting, and retention",
+            "Document rollback thresholds and test configuration recovery procedures",
+            "Confirm encryption-key escrow and test device recovery where applicable",
+            "Inventory legacy authentication and protocol usage before blocking it",
+            "Prepare pilot, validation, and phased assignment groups",
         ),
     )
 
@@ -265,13 +274,16 @@ def _phase_label(wave: int, index: int, count: int) -> str:
 
 
 def _assign_execution_phases(controls: tuple[EnrichedControl, ...], *, max_phase_size: int) -> tuple[EnrichedControl, ...]:
-    groups: dict[int, list[EnrichedControl]] = defaultdict(list)
+    groups: dict[tuple[int, str], list[EnrichedControl]] = defaultdict(list)
     for item in controls:
-        groups[item.recommended_wave].append(item)
+        groups[(item.recommended_wave, item.work_package)].append(item)
     updated: dict[tuple[str, ...], EnrichedControl] = {}
-    for wave, members in groups.items():
-        members.sort(key=lambda item: (item.work_package, -item.priority_score, item.source_identity.as_tuple()))
+    chunks_by_wave: dict[int, list[list[EnrichedControl]]] = defaultdict(list)
+    for (wave, _), members in sorted(groups.items()):
+        members.sort(key=lambda item: (-item.priority_score, item.source_identity.as_tuple()))
         chunks = [members[index : index + max_phase_size] for index in range(0, len(members), max_phase_size)]
+        chunks_by_wave[wave].extend(chunks)
+    for wave, chunks in chunks_by_wave.items():
         for index, chunk in enumerate(chunks):
             label = _phase_label(wave, index, len(chunks))
             for item in chunk:
@@ -317,10 +329,22 @@ def _implementation_phases(controls: tuple[EnrichedControl, ...]) -> tuple[Imple
     level_order = {level: index for index, level in enumerate(PlanningLevel)}
     for control in controls:
         groups[control.execution_phase].append(control)
+    package_phases: dict[tuple[int, str], list[str]] = defaultdict(list)
+    for name, members in groups.items():
+        key = (members[0].recommended_wave, members[0].work_package)
+        package_phases[key].append(name)
+    for names in package_phases.values():
+        names.sort()
     phases: list[ImplementationPhase] = []
     for name, members in sorted(groups.items(), key=lambda item: (item[1][0].recommended_wave, item[0])):
+        package_name = members[0].work_package
+        sibling_phases = package_phases[(members[0].recommended_wave, package_name)]
+        suffix = ""
+        if len(sibling_phases) > 1:
+            suffix = f" (part {sibling_phases.index(name) + 1}/{len(sibling_phases)})"
         phases.append(ImplementationPhase(
             name=name,
+            title=f"Wave {members[0].recommended_wave} / {package_name}{suffix}",
             wave=members[0].recommended_wave,
             control_count=len(members),
             work_packages=tuple(sorted({item.work_package for item in members})),

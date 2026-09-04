@@ -146,9 +146,10 @@ plan-summary.json
 ```
 
 Wave placement accounts for security priority, profile, implementation impact,
-and explicit prerequisites. Wave 0 contains the preparation checklist. Large
-waves are divided into bounded execution phases (`3A`, `3B`, and so on), while
-work packages remain stable functional groupings across phases. Operational,
+and explicit prerequisites. Wave 0 contains nine preparation checks. Execution
+phases have an explicit content name and contain one work package. A work package
+larger than the configured limit is divided into parts (`2F`, `2G`, and so on).
+Work packages remain stable functional groupings across phases. Operational,
 user, and rollback impact are scored separately.
 The plan also includes manual assessment requirements and deployment readiness.
 It is a planning recommendation, not authorization to deploy a control.

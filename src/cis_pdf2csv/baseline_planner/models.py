@@ -98,6 +98,7 @@ class ImplementationPhase(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     name: str
+    title: str
     wave: int = Field(ge=0, le=5)
     control_count: int = Field(ge=1)
     work_packages: tuple[str, ...]

@@ -51,7 +51,8 @@ def test_benchmark_identity_detection_is_evidence_based() -> None:
     )
     assert windows.family == "microsoft-windows-server"
     assert cloud.family == "microsoft-365-foundations"
-    assert unknown.family == "unknown" and unknown.finding == "BENCHMARK_FAMILY_UNSUPPORTED"
+    assert unknown.family == "unknown" and unknown.finding is None
+    assert unknown.benchmark_name == "CIS Product Benchmark"
     assert ambiguous.family == "ambiguous" and ambiguous.finding == "BENCHMARK_FAMILY_AMBIGUOUS"
     assert unknown.benchmark_name != "CIS Microsoft Windows Server Benchmark"
 

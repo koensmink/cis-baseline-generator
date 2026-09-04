@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-active-success)
 
-A deterministic toolkit for parsing CIS Benchmarks, evaluating Mandatory control candidates, enriching controls with reusable Security Knowledge, comparing benchmark versions, and optionally mapping supported controls to Microsoft Intune.
+A deterministic toolkit for parsing CIS Benchmarks, evaluating Mandatory control candidates, enriching controls with reusable Security Knowledge, comparing benchmark versions, optionally mapping supported controls to Microsoft Intune, and producing baseline implementation plans.
 
 > **CIS benchmark content is not included.** Obtain benchmark documents separately and comply with the CIS Terms of Use. 
 
@@ -26,7 +26,14 @@ A deterministic toolkit for parsing CIS Benchmarks, evaluating Mandatory control
 
 ![System architecture](docs/cis-baseline-generator-discussion-board.png)
 
-The parser establishes source evidence. Mandatory reasoning and Security Knowledge operate on structured records. Intune mapping is a downstream implementation capability and is not part of the authoritative knowledge model.
+The parser establishes source evidence. Mandatory reasoning operates on structured
+records, while Security Knowledge and threat analysis provide separate reasoning
+and advisory layers. Intune mapping is a downstream implementation capability and
+is not part of the authoritative knowledge model. The CIS Baseline Planner is
+another downstream layer: it consumes parser-produced `ControlRecord` JSONL,
+reuses the existing Mandatory assessment and Intune verification logic, and
+produces planning artifacts. It does not parse PDFs or consume threat-analysis
+output.
 
 ## Quick Start
 
@@ -124,9 +131,9 @@ cis-intune-map controls.jsonl -o intune_out
 cis-baseline-plan controls.jsonl -o implementation-plan --max-phase-size 75
 ```
 
-The planner reuses Mandatory classification and verified Intune capability status,
-adds explainable risk and work-package metadata, and emits waves without treating
-unverified mappings as deployment-ready.
+The input must be parser-produced `ControlRecord` JSONL. The output directory is
+created when needed, and `--max-phase-size` defaults to `75`. Structured CSV,
+JSONL, and JSON artifacts are written beneath `implementation-plan`.
 
 See [CLI Usage](docs/CLI_USAGE.md) for all commands, options, container examples, benchmark diff usage, and LLM fallback.
 
@@ -218,6 +225,29 @@ suggestion artifacts remain separate.
 
 Unsupported benchmark families do not run Windows-specific rules.
 
+### CIS Baseline Planner
+
+The `cis_pdf2csv.baseline_planner` module turns parser-produced controls into an
+implementation-oriented plan. It internally reuses the existing Mandatory engine
+and deterministic Intune resolver and verification boundary; it does not consume
+the output artifacts of the Mandatory, Intune, or threat-analysis CLIs. Planning
+does not change a control's Mandatory proposal, and an unverified Intune mapping
+is never treated as deployment-ready.
+
+Its main capabilities are:
+
+- Frozen, typed Pydantic models for enriched controls, work packages,
+  implementation phases, and the complete plan.
+- A deterministic planning engine that assigns risk and impact metadata,
+  dependencies, priorities, explainable waves, and bounded execution phases.
+- The dedicated `cis-baseline-plan` CLI for parser-produced `ControlRecord` JSONL.
+- Structured exporters for CSV and JSONL planning artifacts, per-wave and
+  per-phase CSV files, review items, and a JSON summary.
+
+The result is a planning recommendation for review, not authorization or an
+automated mechanism to deploy controls. Threat analysis remains a separate
+advisory workflow and is not an input to the planner.
+
 ### Benchmark Diff
 
 The diff module compares parser-produced JSONL exports and reports added, removed, and field-level changed controls.
@@ -232,8 +262,13 @@ See [CLI Usage](docs/CLI_USAGE.md#benchmark-diff).
 4. Resolve and validate Security Knowledge relationships.
 5. Review Candidate Mandatory and Review Required results.
 6. Evaluate attack-path and boundary coverage.
-7. Optionally map supported controls to Intune.
-8. Compare benchmark versions when required.
+7. Optionally apply the separate threat-analysis workflow as an advisory priority
+   overlay.
+8. Optionally map supported controls to Intune.
+9. Create an implementation plan directly from parser-produced JSONL when
+   required; the planner internally reuses Mandatory assessment and Intune
+   verification logic rather than their CLI output artifacts.
+10. Compare benchmark versions when required.
 
 ## Supported Scope
 

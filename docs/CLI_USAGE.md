@@ -120,8 +120,55 @@ See:
 
 ## Baseline Implementation Planning
 
+The baseline planner consumes parser-produced `ControlRecord` JSONL. It does not
+accept the CSV export because planning depends on typed parser fields and source
+identity metadata.
+
+### Create a baseline plan
+
 ```bash
-cis-baseline-plan controls.jsonl -o implementation-plan --max-phase-size 75
+cis-baseline-plan controls.jsonl -o implementation-plan
+```
+
+The default maximum execution-phase size is 75 controls.
+
+### Complete workflow from PDF to implementation plan
+
+```bash
+cis-pdf2csv benchmark.pdf \
+  --format jsonl \
+  -o controls.jsonl
+
+cis-baseline-plan controls.jsonl \
+  -o implementation-plan \
+  --max-phase-size 75
+```
+
+### Create smaller execution phases
+
+```bash
+cis-baseline-plan controls.jsonl \
+  -o implementation-plan-small-phases \
+  --max-phase-size 40
+```
+
+`--max-phase-size` must be at least 1. A work package larger than this limit is
+split into separately named parts. Separate work packages are not mixed merely
+to fill a phase.
+
+Equivalent module invocation:
+
+```bash
+python -m cis_pdf2csv.baseline_planner.cli \
+  controls.jsonl \
+  -o implementation-plan \
+  --max-phase-size 75
+```
+
+Show all available options:
+
+```bash
+cis-baseline-plan --help
 ```
 
 The planner reuses the existing Mandatory classifier and Intune verification
@@ -130,29 +177,58 @@ categories, work packages, implementation impact, dependencies, priority, and an
 explainable recommended wave. Unsupported or unverified Intune mappings remain
 `needs_validation` and are never marked deployment-ready.
 
+### Wave model
+
+| Wave | Planning intent |
+|---|---|
+| 0 | Scope, prerequisites, conflicts, recovery, monitoring, and pilot preparation |
+| 1 | Low-impact logging and visibility controls used to observe later changes |
+| 2 | Foundational baseline controls with manageable implementation impact |
+| 3 | Identity, privileged access, remote access, and network hardening |
+| 4 | Controls requiring explicit compatibility testing and approved rollback |
+| 5 | Manual implementation or Level 2 hardening after the core baseline |
+
+The wave is a planning recommendation. The execution phase is the deployable
+slice within that wave, such as `2A` or `2F`. Every execution phase contains one
+work package. Operational impact, user impact, and rollback complexity are
+recorded separately.
+
+### Output artifacts
+
 The output directory contains:
 
 ```text
-enriched-controls.csv
-enriched-controls.jsonl
-work-packages.csv
-implementation-phases.csv
-waves.csv
-wave-01.csv ... wave-05.csv
-phase-1.csv, phase-2A.csv ...
-wave-00-prerequisites.csv
-manual-review.csv
-plan-summary.json
+implementation-plan/
+├── enriched-controls.csv
+├── enriched-controls.jsonl
+├── implementation-phases.csv
+├── manual-review.csv
+├── phase-1.csv
+├── phase-2A.csv ...
+├── plan-summary.json
+├── wave-00-prerequisites.csv
+├── wave-01.csv ... wave-05.csv
+├── waves.csv
+└── work-packages.csv
 ```
 
+| Artifact | Contents |
+|---|---|
+| `enriched-controls.csv` | All controls with risk, category, impact, priority, dependencies, readiness, wave, and phase |
+| `enriched-controls.jsonl` | The same enriched records in structured JSONL |
+| `work-packages.csv` | Stable functional groupings and the phases in which they occur |
+| `implementation-phases.csv` | Phase names, counts, contained work package, dependencies, and control IDs |
+| `waves.csv` | Complete control-level planning view across all waves |
+| `wave-NN.csv` | All controls assigned to a numerical wave |
+| `phase-*.csv` | Controls for one bounded, single-work-package execution phase |
+| `wave-00-prerequisites.csv` | Nine checks to complete before implementation starts |
+| `manual-review.csv` | Controls that are not verified as deployment-ready |
+| `plan-summary.json` | Counts by wave, phase, priority, readiness, and work package |
+
 Wave placement accounts for security priority, profile, implementation impact,
-and explicit prerequisites. Wave 0 contains nine preparation checks. Execution
-phases have an explicit content name and contain one work package. A work package
-larger than the configured limit is divided into parts (`2F`, `2G`, and so on).
-Work packages remain stable functional groupings across phases. Operational,
-user, and rollback impact are scored separately.
-The plan also includes manual assessment requirements and deployment readiness.
-It is a planning recommendation, not authorization to deploy a control.
+and explicit prerequisites. Work packages remain stable across phases. The plan
+includes manual-assessment requirements and deployment readiness, but it is not
+authorization to deploy a control.
 
 ## Benchmark Diff
 

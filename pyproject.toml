@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cis-pdf2csv"
-version = "1.1.0"
+version = "1.1.1"
 description = "Deterministic CIS benchmark parsing, security knowledge analysis, and Windows Intune mapping"
 requires-python = ">=3.10"
 license = "MIT"
@@ -32,3 +32,4 @@ cis-mandatory-analyze = "cis_pdf2csv.mandatory.cli:main"
 cis-threat-analyze = "cis_pdf2csv.security_knowledge.threat_intelligence.cli:main"
 cis-threat-interpret = "cis_pdf2csv.security_knowledge.threat_intelligence.ai.provider_cli:main"
 cis-threat-approve = "cis_pdf2csv.security_knowledge.threat_intelligence.ai.approval_cli:main"
+cis-baseline-plan = "cis_pdf2csv.baseline_planner.cli:main"

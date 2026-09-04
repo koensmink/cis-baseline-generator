@@ -2,13 +2,14 @@
 
 This document contains the operational command reference for the CIS Security Analysis and Baseline Engineering Toolkit.
 
-The package currently installs six console commands:
+The package currently installs seven console commands:
 
 | Command | Purpose |
 |---|---|
 | `cis-pdf2csv` | Parse CIS Benchmark PDFs or dispatch a single JSONL input to the Intune mapper |
 | `cis-mandatory-analyze` | Run deterministic Mandatory-control analysis and attack-path coverage |
 | `cis-intune-map` | Map parser-produced JSONL to supported Intune artifacts |
+| `cis-baseline-plan` | Enrich controls and create deterministic implementation waves |
 | `cis-threat-analyze` | Resolve approved threat contexts and produce a deterministic advisory control-priority overlay |
 | `cis-threat-interpret` | Use the optional OpenAI adapter to create an untrusted structured proposal from a local advisory |
 | `cis-threat-approve` | Record explicit human review and optionally convert an approved proposal to a `ThreatContext` |
@@ -116,6 +117,41 @@ See:
 - [Mandatory Control Engine — Phase 1](mandatory-control-phase1.md)
 - [Security Knowledge Model](SECURITY_KNOWLEDGE_MODEL.md)
 - [Security Knowledge Catalog](SECURITY_KNOWLEDGE_CATALOG.md)
+
+## Baseline Implementation Planning
+
+```bash
+cis-baseline-plan controls.jsonl -o implementation-plan --max-phase-size 75
+```
+
+The planner reuses the existing Mandatory classifier and Intune verification
+boundary. It adds deterministic risk statements, prevented outcomes, security
+categories, work packages, implementation impact, dependencies, priority, and an
+explainable recommended wave. Unsupported or unverified Intune mappings remain
+`needs_validation` and are never marked deployment-ready.
+
+The output directory contains:
+
+```text
+enriched-controls.csv
+enriched-controls.jsonl
+work-packages.csv
+implementation-phases.csv
+waves.csv
+wave-01.csv ... wave-05.csv
+phase-1.csv, phase-2A.csv ...
+wave-00-prerequisites.csv
+manual-review.csv
+plan-summary.json
+```
+
+Wave placement accounts for security priority, profile, implementation impact,
+and explicit prerequisites. Wave 0 contains the preparation checklist. Large
+waves are divided into bounded execution phases (`3A`, `3B`, and so on), while
+work packages remain stable functional groupings across phases. Operational,
+user, and rollback impact are scored separately.
+The plan also includes manual assessment requirements and deployment readiness.
+It is a planning recommendation, not authorization to deploy a control.
 
 ## Benchmark Diff
 
@@ -469,6 +505,7 @@ Implementation:
 - parser CLI: [`src/cis_pdf2csv/cli.py`](../src/cis_pdf2csv/cli.py)
 - Mandatory CLI: [`src/cis_pdf2csv/mandatory/cli.py`](../src/cis_pdf2csv/mandatory/cli.py)
 - Intune CLI: [`src/cis_pdf2csv/intune_mapper/cli.py`](../src/cis_pdf2csv/intune_mapper/cli.py)
+- baseline planner CLI: [`src/cis_pdf2csv/baseline_planner/cli.py`](../src/cis_pdf2csv/baseline_planner/cli.py)
 - threat analysis CLI: [`src/cis_pdf2csv/security_knowledge/threat_intelligence/cli.py`](../src/cis_pdf2csv/security_knowledge/threat_intelligence/cli.py)
 - threat interpretation CLI: [`src/cis_pdf2csv/security_knowledge/threat_intelligence/ai/provider_cli.py`](../src/cis_pdf2csv/security_knowledge/threat_intelligence/ai/provider_cli.py)
 - threat approval CLI: [`src/cis_pdf2csv/security_knowledge/threat_intelligence/ai/approval_cli.py`](../src/cis_pdf2csv/security_knowledge/threat_intelligence/ai/approval_cli.py)

@@ -18,6 +18,7 @@ A deterministic toolkit for parsing CIS Benchmarks, evaluating Mandatory control
 - Compares structured exports between benchmark versions.
 - Maps supported Windows Server controls to Intune using deterministic rule packs.
 - Uses optional LLM suggestions only for unresolved Intune mappings; suggestions remain advisory.
+- Produces deterministic risk enrichment, work packages, and phased implementation waves.
 
 ## Architecture
 
@@ -116,6 +117,16 @@ threat relevance. Provider, validation, and approval failures fail closed.
 ```bash
 cis-intune-map controls.jsonl -o intune_out
 ```
+
+### Create an implementation and wave plan
+
+```bash
+cis-baseline-plan controls.jsonl -o implementation-plan --max-phase-size 75
+```
+
+The planner reuses Mandatory classification and verified Intune capability status,
+adds explainable risk and work-package metadata, and emits waves without treating
+unverified mappings as deployment-ready.
 
 See [CLI Usage](docs/CLI_USAGE.md) for all commands, options, container examples, benchmark diff usage, and LLM fallback.
 
